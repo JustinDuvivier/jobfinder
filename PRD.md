@@ -1,15 +1,15 @@
 # JobFinder — Product Requirements Document
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** Active
-**Owner:** the single local user
+**Owner:** the single self-hosting user
 **Companion doc:** Technical design in `jobfinder-docs.md` (the *how*; this PRD is the *what* and *why*)
 
 ---
 
 ## 1. Summary
 
-JobFinder is a personal, single-user, local web app that streamlines the LinkedIn job-application pipeline end to end. It scrapes fresh postings, scores each against the user's resume, lets the user decide which to pursue, rewrites the resume in LaTeX tailored to a chosen role — with a live side-by-side editor, a rationale for every change, and a hard one-page guarantee — saves an approved PDF to a structured folder on disk, and tracks each application through the hiring pipeline. It runs entirely on one machine for one person. There is no multi-user, hosting, or account requirement.
+JobFinder is a self-hosted, single-user web app that streamlines the LinkedIn job-application pipeline end to end. It scrapes fresh postings, scores each against the user's resume, lets the user decide which to pursue, rewrites the resume in LaTeX tailored to a chosen role — with a live side-by-side editor, a rationale for every change, and a hard one-page guarantee — saves an approved PDF to a structured folder on disk, and tracks each application through the hiring pipeline. It runs on one machine for one person — natively as a single Node process, or as a containerized stack via Docker Compose (FR-29), on any OS. There is no multi-user, shared-hosting, or account requirement.
 
 ## 2. Problem & background
 
@@ -27,7 +27,7 @@ Applying to engineering roles at volume has two expensive, repetitive steps: dec
 ## 4. Non-goals (explicitly out of scope)
 
 - Multi-user accounts, teams, or sharing.
-- Cloud hosting or deployment — this is a local tool.
+- Multi-tenant cloud hosting or public deployment — this is a self-hosted tool for one person's own machine. (Containerized distribution *for* self-hosting is in scope: FR-29.)
 - Authenticated LinkedIn scraping, or anything that requires or risks a LinkedIn account.
 - Auto-applying or auto-submitting without explicit user approval.
 - Mobile-first UX or cross-device real-time sync.
@@ -36,7 +36,7 @@ Applying to engineering roles at volume has two expensive, repetitive steps: dec
 
 ## 5. Target user
 
-A single technical job seeker ("Alex") who maintains a LaTeX resume, applies primarily through LinkedIn to AI / ML / Software / Forward-Deployed / Solutions Engineering roles, runs the tool on their own machine on demand, and wants to analyze their own outcome data.
+A single technical job seeker ("Alex") who maintains a LaTeX resume, applies primarily through LinkedIn to AI / ML / Software / Forward-Deployed / Solutions Engineering roles, runs the tool on their own machine — natively or in Docker, on any OS — on demand, and wants to analyze their own outcome data.
 
 ## 6. User stories
 
@@ -107,9 +107,15 @@ Each requirement is intended to be individually testable.
 ### Notifications
 - **FR-28** — After each headless scheduled run (§12), at most **one** native desktop toast summarizes that run's notable results — no browser tab required: jobs scored at or above the FR-9a threshold ("strong matches" — a single match is named in full; several are counted, with the best match's company and score headlined) and jobs parked at 70 under FR-6a ("needs review" — counted separately and never presented as earned scores). Parks notify independently of the threshold in both directions: they toast even when the threshold is above 70, and they are never folded into the strong-match count when it is below 70. A run that scores nothing notable stays silent, and only the run's newly scored jobs count — jobs scored in earlier runs never re-notify. There is no separate on/off toggle: a configured run interval (`runIntervalMinutes > 0`) is the opt-in, and interval 0 disables both the runs and the toasts; the browser-side alert toggle continues to govern only the interactive flows. A notification failure never fails the run.
 
+### Distribution & deployment
+- **FR-29 — Containerized distribution.** The app ships as a Docker image — Node runtime + built app + a mid-size TeX Live, so the whole pipeline (scrape → score → rewrite → compile → save) runs inside one container — plus a `docker-compose.yml` that brings up the full stack in one command: the app, a local-scoring Ollama sidecar, and a one-shot init service that pre-pulls the scoring model (tag overridable via `OLLAMA_MODEL`). State survives restarts: the SQLite file and the Ollama model cache live in named volumes, approved resume packages land in a `./output` host bind, and the user's private `resume/` assets can be bind-mounted read-only. Secrets (`ANTHROPIC_API_KEY`, optional `RAPID_API_KEY`) are supplied at run time from the untracked `.env` and are never baked into the image. Native (non-Docker) runs remain fully supported and unchanged.
+- **FR-30 — Container-mode degradation.** With `JOBFINDER_CONTAINER=1` (baked into the image), the two host-OS integrations degrade gracefully instead of breaking: "open folder" (FR-24) returns the containment-verified directory without spawning a file manager — surfaced in the UI as a copy-path affordance — and the desktop-toast notifier (FR-28) is a silent no-op. Everything else behaves identically to a native run, and native runs (flag unset) are byte-for-byte unchanged.
+- **FR-31 — Configurable Ollama endpoint.** The address of the local scoring backend is a single server-side environment variable, `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`), resolved in exactly one place — so pointing the app at the compose sidecar, the Docker host, or another machine is configuration, never a code change.
+- **FR-32 — Starter resume assets.** The repo commits a generic starter set in `resume-example/` — a compile-clean one-page `base_resume.tex` for the generic identity "Alex Candidate", plus `source_of_truth.md`, `scoring_prompt.md`, and `rewrite_rules.md`. Assets resolve per file: a Setup-edited value wins, else the user's private, gitignored `resume/` directory, else the committed starter — so a fresh clone runs the full pipeline with zero configuration and no personal data, and the user can replace files one at a time.
+
 ## 8. Non-functional requirements
 
-- **NFR-1 — Local & self-contained.** One Next.js process; no remote services required to run. The default scoring backend talks to a local Ollama daemon on the same machine — still fully local, but a separate process the user runs.
+- **NFR-1 — Self-hosted & self-contained.** One Next.js process; no remote services required to run. Runs natively or as the FR-29 container stack, on any OS. The default scoring backend talks to an Ollama daemon the user hosts — still fully self-hosted, but a separate process: natively a local daemon (or any machine named by `OLLAMA_BASE_URL`, FR-31), in Docker the compose sidecar.
 - **NFR-2 — Cost.** Near-zero infrastructure; scoring — the highest-frequency AI call — runs on the local model at zero marginal cost by default. When the Anthropic backend is selected, AI cost is minimized via the cheap tier for scoring, prompt caching, the blocklist filtering before scoring, and the Batch API's 50% discount for scheduled (headless) scoring runs where latency is free.
 - **NFR-3 — One-page guarantee.** A hard invariant enforced at save time, not advisory.
 - **NFR-4 — Truthfulness.** Rewrites are constrained to user-provided material.
@@ -118,6 +124,7 @@ Each requirement is intended to be individually testable.
 - **NFR-7 — Security.** LaTeX compiles in a hardened sandbox; file paths are built server-side from identifiers and never trusted from the client; the API key stays server-side.
 - **NFR-8 — Resilience.** Interrupted background work is reconciled on restart.
 - **NFR-9 — Latency.** Rewrite output begins streaming within ~1–2s; scores land within seconds of a scrape.
+- **NFR-10 — Not reachable beyond the host.** The app has no authentication, so it must not be reachable from any other machine. Natively this is satisfied by binding the server to `127.0.0.1` (`npm start`); in Docker the in-container server binds `0.0.0.0` and the invariant moves to the compose port mapping, which publishes `127.0.0.1:3000` only (the Ollama sidecar publishes no ports at all). Remote access is the user's own VPN or SSH tunnel — never a LAN-visible or public bind.
 
 ## 9. Success metrics
 
@@ -130,8 +137,8 @@ Each requirement is intended to be individually testable.
 ## 10. Constraints & assumptions
 
 - LinkedIn guest endpoints remain accessible at cautious request rates; Proxycurl is a fallback. Rate limiting is IP-based and no account is at risk.
-- The user maintains a compile-clean LaTeX resume using a simple, standard template.
-- TeX Live is installed locally.
+- The user maintains a compile-clean LaTeX resume using a simple, standard template — or starts from the committed `resume-example/` starter (FR-32).
+- Native runs have a TeX Live distribution with `pdflatex` on `PATH`; the Docker image ships one (FR-29).
 - A single user on a single machine; no concurrent writers.
 
 ## 11. Key flow (reference)

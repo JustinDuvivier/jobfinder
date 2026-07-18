@@ -4,7 +4,7 @@ Guidance for any AI agent (and human) working in this repository. **Read this fi
 
 ## What this project is
 
-JobFinder is a personal, single-user, local LinkedIn job-application pipeline: scrape → score → decide → tailor resume (LaTeX/PDF, one page) → approve & save → track. It runs as **one Next.js (Node) process with a single SQLite file**.
+JobFinder is a self-hosted, single-user LinkedIn job-application pipeline: scrape → score → decide → tailor resume (LaTeX/PDF, one page) → approve & save → track. It runs as **one Next.js (Node) process with a single SQLite file** — natively on any OS, or as the Docker Compose stack (app + TeX Live image, Ollama scoring sidecar).
 
 ## Sources of truth — read before writing code
 
@@ -34,7 +34,7 @@ Rules for using the docs:
 
 - Build file paths server-side from identifiers (`job_id`, company, title, owner). **Never** accept a path string from the client. Same rule for "open folder."
 - Compile LaTeX in a hardened sandbox: `pdflatex -no-shell-escape`, a hard timeout, restricted file reads, an isolated temp directory. LaTeX here is untrusted input (LLM-generated, then user-edited).
-- The Anthropic API key stays server-side. Bind the server to `127.0.0.1`.
+- The Anthropic API key stays server-side. The app has no auth and must never be reachable beyond the host (NFR-10): natively the server binds `127.0.0.1`; in Docker the in-container server binds `0.0.0.0` and the compose port mapping publishes `127.0.0.1:3000` only.
 
 ## Testing — required for every module
 

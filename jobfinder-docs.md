@@ -1,6 +1,6 @@
-loo# JobFinder — Documentation
+# JobFinder — Documentation
 
-**Version:** 3.0  
+**Version:** 3.1  
 **Stack:** Next.js (App Router) · React · TypeScript · SQLite (better-sqlite3) · Anthropic API (Streaming) · LaTeX · PDF
 
 ---
@@ -26,7 +26,8 @@ loo# JobFinder — Documentation
 13. [Extending the App](#extending-the-app)
 14. [Known Limitations](#known-limitations)
 15. [Cost & Token Optimization](#cost--token-optimization)
-16. [Local Dev Setup](#local-dev-setup)
+16. [Deployment (Docker)](#deployment-docker)
+17. [Local Dev Setup](#local-dev-setup)
 
 ---
 
@@ -38,7 +39,7 @@ JobFinder is a six-stage job application pipeline. It lets you:
 2. **Score** each job against your resume — on a local Ollama model by default, or Claude when selected — with scores arriving progressively as a concurrent batch finishes
 3. **Decide** — decline or continue with each job
 4. **Rewrite** your LaTeX resume for the specific role using Claude with streaming output — the rewritten LaTeX appears in the editor token by token; the change log (*what* changed) is computed server-side from the diff once the stream completes and persisted with the rewrite, and a separate asynchronous call produces an explanation of *why* each change was made
-5. **Approve** the rewrite — the server compiles the PDF, confirms it is one page, saves it to disk under `C:\Users\Alex\Documents\Claude\Projects\Extremely_Optimized_Resumes\Jobs\{YYYYMMDD}\{Company}_{Job_Title}\Alex_Candidate_Resume.pdf`, and writes the final status to SQLite in one operation
+5. **Approve** the rewrite — the server compiles the PDF, confirms it is one page, saves it to disk under the configured output base directory (`JOBFINDER_OUTPUT_DIR`) as `{YYYYMMDD}/{Company}_{Job_Title}_{disambiguator}/{Owner}_Resume.pdf`, and writes the final status to SQLite in one operation
 6. **Track** applications through the hiring pipeline (Applied → Interview → Offer / Rejected)
 
 The AI work is routed for cost: scoring — a classification task — runs on the configured scoring backend, the local Ollama model by default (zero marginal cost) or Claude Haiku 4.5 when Anthropic is selected, while rewriting and explaining run on Claude Sonnet 5, where output quality matters more. The rewrite uses Anthropic's streaming API so output appears immediately rather than after a ten-to-twenty-second wait. The change log that populates the diff panel is computed server-side by the rewrite route, which diffs the original and rewritten LaTeX strings using a local library once the stream completes — Claude only needs to return the rewritten LaTeX itself, which keeps output token usage low and reduces the risk of mid-document truncation. (It does not eliminate it: the rewrite is still bounded by the `max_tokens` parameter, and that value must be set high enough for a full resume — see Known Limitations.)
@@ -216,6 +217,7 @@ The Setup module is a server-rendered form. Initial values are loaded from SQLit
 | LinkedIn Jobs Search URL | Reserved for the **Proxycurl** strategy, which takes a single LinkedIn search URL. Stored in `user_config.search_url`. (The guest strategy ignores it and uses keywords × locations instead.) |
 | Resume — LaTeX source | Full LaTeX document. Stored in SQLite as the canonical base document. Never overwritten by the AI rewrite — the rewritten version is stored separately on the job record. |
 | Source of Truth | Free-form text of real accomplishments, metrics, and skills. Stored in SQLite and passed to every rewrite call. The AI draws only from this — it will not fabricate. |
+| *(file fallback)* | The resume, Source of Truth, scoring prompt, and rewrite rules resolve **per file** through `effectiveConfig` (`lib/config/effective.ts`): a non-empty Setup value wins; an empty field falls back to the user's private, gitignored `resume/` directory (`lib/resume/load.ts`), and a file missing there falls back to the committed generic starter in `resume-example/` (FR-32). A fresh clone therefore runs end to end with zero configuration, as "Alex Candidate". |
 | Scraper Strategy | Which scraping implementation the scraper should use: Demo, LinkedIn API (guest endpoints), or Proxycurl. Stored in user config and sent as a parameter when scraping is triggered. |
 | Also scrape Greenhouse | An orthogonal on/off toggle (FR-5a): when on, the Greenhouse aggregator source runs **alongside** whichever primary strategy is selected. Persisted as `user_config.greenhouse_enabled` (0/1). See "Strategy D — Greenhouse (aggregator)". |
 | RapidAPI key: set/missing | A read-only presence indicator for the aggregator key (`RAPID_API_KEY`) the Greenhouse source needs. It reflects **environment presence only** (a boolean) — the key value is read server-side and never reaches the client, so Setup can flag "enabled but keyless" without exposing the secret. |
@@ -309,7 +311,7 @@ Every status change in the Tracker is a `ChangeTrackerStatusCommand` written to 
 | Withdrawn | I pulled out after applying (including declining an offer). |
 | Ghosted | Applied, no response after a long silence. |
 
-Each row with an `approved_pdf_path` shows a folder icon. Clicking it calls the `/api/open-folder` route with the row's `job_id`; the handler resolves the saved path from SQLite (never from the request) and opens the containing directory in Windows Explorer or macOS Finder. Metric cards at the top are SQLite counts by status, refreshed when a status changes.
+Each row with an `approved_pdf_path` shows a folder icon. Clicking it calls the `/api/open-folder` route with the row's `job_id`; the handler resolves the saved path from SQLite (never from the request) and opens the containing directory in the OS file manager (`explorer.exe`, `open`, or `xdg-open`). In container mode (`JOBFINDER_CONTAINER=1`, FR-30) there is no host file manager to spawn: the route returns `{ opened: false, dir }` with the still-containment-verified path, and the UI copies the path to the clipboard instead. Metric cards at the top are SQLite counts by status, refreshed when a status changes.
 
 ---
 
@@ -446,18 +448,20 @@ The same rule applies to `/api/open-folder`. It does **not** accept a path strin
 
 ### PathBuilder
 
-PathBuilder is a pure utility on the server — no side effects, no I/O — that assembles the output path from five segments in order: the base directory from environment config, a date folder in ISO 8601 `YYYYMMDD` format using today's date at the moment of approval, a company-plus-title folder, and the filename.
+PathBuilder is a pure utility on the server — no side effects, no I/O — that assembles the output path from four segments in order: the base directory from environment config (`JOBFINDER_OUTPUT_DIR`), a date folder in ISO 8601 `YYYYMMDD` format using today's date at the moment of approval, a company-plus-title folder, and the filename. Segments are joined with the **platform separator** (`node:path`'s `sep` — backslash on native Windows, forward slash on macOS, Linux, and in the Docker container), while segment *names* are always held to the stricter Windows sanitization rules below, so an output tree written on any OS remains valid when copied to any other.
 
 The `YYYYMMDD` format is used rather than `DDMMYYYY` so that folders sort chronologically in Windows Explorer and every other file system browser without any configuration. `20260618` sorts before `20260625`; `18062026` and `25062026` sort in the wrong order.
 
 The company-plus-title folder combines the sanitized company name and the sanitized job title — for example, `Stripe_AI_Engineer`. Sanitization strips Windows-illegal characters (`< > : " / \ | ? *`), trailing dots and spaces, and avoids reserved device names (`CON`, `PRN`, `AUX`, `NUL`, `COM1`–`COM9`, `LPT1`–`LPT9`); spaces become underscores. Using company-plus-title as the default (rather than company alone) prevents the silent overwrite that would occur when approving two distinct roles at the same company on the same day. `Stripe_AI_Engineer` and `Stripe_Backend_Engineer` are separate folders; both PDFs are preserved without any manual intervention.
 
-Company-plus-title still collides in one narrow case: two genuinely distinct postings that share both company and title on the same day (common at large employers with multiple identical reqs). To make the path collision-free by construction, the folder is suffixed with a short disambiguator derived from the job — the LinkedIn job ID or a slice of `job_id`, e.g. `Stripe_AI_Engineer_a1b2c3`. Because the suffix is derived from the stable `job_id`, re-approving the *same* job still maps to the same folder (so re-approval remains an intentional overwrite). PathBuilder also guards against the Windows `MAX_PATH` limit of 260 characters: the base path is already ~75 characters, so an unusually long company-plus-title is truncated to keep the full path within the limit.
+Company-plus-title still collides in one narrow case: two genuinely distinct postings that share both company and title on the same day (common at large employers with multiple identical reqs). To make the path collision-free by construction, the folder is suffixed with a short disambiguator derived from the job — a hash slice of the stable `job_id`, e.g. `Stripe_AI_Engineer_a1b2c3`. Because the suffix is derived from the stable `job_id`, re-approving the *same* job still maps to the same folder (so re-approval remains an intentional overwrite). PathBuilder also guards against the Windows `MAX_PATH` limit of 260 characters on every platform (portability again): an unusually long company-plus-title is truncated — always preserving the disambiguator suffix, which is what keeps the path collision-free — so the full path stays within the limit even under a long base directory.
 
 ### Expected output structure
 
+A native Windows run with `JOBFINDER_OUTPUT_DIR=C:\Users\Alex\Resumes\Jobs` (any OS works; this is just an example):
+
 ```
-C:\Users\Alex\Documents\Claude\Projects\Extremely_Optimized_Resumes\Jobs\
+C:\Users\Alex\Resumes\Jobs\
   └── 20260618\
         ├── Stripe_AI_Engineer_a1b2c3\
         │     └── Alex_Candidate_Resume.pdf
@@ -466,6 +470,8 @@ C:\Users\Alex\Documents\Claude\Projects\Extremely_Optimized_Resumes\Jobs\
         └── Anthropic_Research_Engineer_7a8b9c\
               └── Alex_Candidate_Resume.pdf
 ```
+
+In the Docker container the base is `/output` (bind-mounted to `./output` on the host — see Deployment), so the same approval lands at `./output/20260618/Stripe_AI_Engineer_a1b2c3/Alex_Candidate_Resume.pdf` on the host.
 
 Re-approving the same job (same `job_id`, hence the same disambiguated folder) overwrites the existing PDF — the most recently approved version wins. This is the intended behavior when you edit and re-approve the same application.
 
@@ -506,7 +512,7 @@ All routes are Next.js route handlers under `app/api/`. The browser calls them; 
 | POST | `/api/explain` | Synchronous **Sonnet 5** call returning `{summary, bullets}`, fired after the diff is computed. When the persisted diff records no edits it makes no model call and returns a benign `200 {noChanges: true}` (clearing any stored explanation) — a no-change generation is a valid outcome, not an error. |
 | POST | `/api/compile` | SHA-256 cache check; `pdflatex` with `SOURCE_DATE_EPOCH` on miss; returns PDF bytes **and page count** — no disk write |
 | POST | `/api/save` | Receives identifiers only; builds path; compile (cache-checked); **verifies exactly one page**; disk write; atomic SQLite commit of `approved_pdf_path` + `APPROVED` |
-| POST | `/api/open-folder` | Receives a `job_id`; reads `approved_pdf_path` from SQLite; verifies it is inside the base directory; opens that folder in Windows Explorer or macOS Finder. Never accepts a path string. |
+| POST | `/api/open-folder` | Receives a `job_id`; reads `approved_pdf_path` from SQLite; verifies it is inside the base directory; opens that folder in the OS file manager. Never accepts a path string. Returns `{ opened, dir }`; in container mode (FR-30) it skips the spawn and returns `opened: false` so the UI offers copy-path instead. |
 | POST | `/api/salary` | Finds a missing salary through the salary resolver (`lib/salary`): explicit field → description prose → AI web-search lookup on **Haiku** (the injected tier). Persists a newly found value; returns `{ salary, source }`. |
 | POST | `/api/jobs/salary` | Manually sets (or clears) a job's salary — the user typing in a value they found; no AI involved. |
 | GET/POST | `/api/schedule` | The backend auto-run scheduler (PRD §12). **GET** returns status — `intervalMinutes`, `nextRunAt` (epoch ms the Jobs view counts down to), `running`, `lastRunAt`, `lastSummary`. **POST** is "Run now": triggers a server-side scrape+score immediately (non-blocking) and the post-run reschedule resets the countdown. See *Scheduled scraping*. |
@@ -598,7 +604,7 @@ The scheduler reschedules with a fresh `setTimeout` *after* each run resolves ra
 
 Because a backend run has no SSE stream attached, the Jobs view learns about its results by **refetch**, not streaming: it polls `GET /api/schedule` and calls `router.refresh()` when `lastRunAt` advances (matching the documented "SSE for the three streaming routes, refetch elsewhere" split). The scheduler is armed lazily on the first `/api/schedule` request after boot and re-armed whenever Setup saves a new cadence (`POST /api/config`). Arming is **anchored to the actual last run**: the runner reads the most recent `scrape_sessions.ended_at` and the next run is `lastRun + interval` (clamped to now — an overdue run fires immediately), so a server restart or dev-mode recompile never resets the countdown to a full interval. The scheduler singleton itself is stashed on `globalThis` for the same reason: Next.js dev recompiles module scope, and a module-scoped singleton would be silently replaced mid-countdown. For the throughput and cost characteristics of scoring — concurrency, rate limits, caching, and whether the Batch API is worth it — see *Cost & Token Optimization*.
 
-The user still hears about a headless run's notable results without a tab open (FR-28): the run job fires **at most one native desktop toast** per run, calling the shared server-side notifier (`fireNotifier`, `lib/notify/notifier` → `scripts/notify.py`) directly — no HTTP self-request to `/api/notify`. What the toast says is pure, testable composition (`lib/notify/run-toast`): the shared warm-first loop tallies each settled score into `ScoringSummary.notables` — strong matches (at/above the FR-9a threshold, best match tracked) and FR-6a parks (counted separately; a park is a review request, so it notifies at any threshold and never inflates the strong count) — and `composeRunToast` turns the tally into one `{title, message}` or `null` (silent) when nothing notable scored. Because the tally lives in the loop's single settle funnel, both scheduled backends feed it identically — the sequential local loop and batch-settled Anthropic results alike — and only the jobs *this run* scored are counted, so earlier runs never re-notify. The composer also bounds the strings to the `/api/notify` reference limits (title ≤ 200, message ≤ 500 — the shared notifier itself never truncates), and the runner wraps the fire in try/catch: `fireNotifier` can throw synchronously, and a missed toast must never fail the run. The interactive flows are untouched — the browser-side alert toggle keeps governing only them, while the scheduled toast's opt-in is the run interval itself. **Operational note:** coverage is only as good as the machine's uptime — the scheduler needs the process running and, on the default backend, Ollama serving, so "don't sleep while plugged in" is a manual Windows power setting the user makes, overnight gaps are accepted, and an overdue run simply fires on wake (the clamped anchor above).
+The user still hears about a headless run's notable results without a tab open (FR-28): the run job fires **at most one native desktop toast** per run, calling the shared server-side notifier (`fireNotifier`, `lib/notify/notifier` → `scripts/notify.py`) directly — no HTTP self-request to `/api/notify`. What the toast says is pure, testable composition (`lib/notify/run-toast`): the shared warm-first loop tallies each settled score into `ScoringSummary.notables` — strong matches (at/above the FR-9a threshold, best match tracked) and FR-6a parks (counted separately; a park is a review request, so it notifies at any threshold and never inflates the strong count) — and `composeRunToast` turns the tally into one `{title, message}` or `null` (silent) when nothing notable scored. Because the tally lives in the loop's single settle funnel, both scheduled backends feed it identically — the sequential local loop and batch-settled Anthropic results alike — and only the jobs *this run* scored are counted, so earlier runs never re-notify. The composer also bounds the strings to the `/api/notify` reference limits (title ≤ 200, message ≤ 500 — the shared notifier itself never truncates), and the runner wraps the fire in try/catch: `fireNotifier` can throw synchronously, and a missed toast must never fail the run. The interactive flows are untouched — the browser-side alert toggle keeps governing only them, while the scheduled toast's opt-in is the run interval itself. **Operational note:** coverage is only as good as the machine's uptime — the scheduler needs the process running and, on the default backend, Ollama serving, so "don't sleep while plugged in" is a power setting the user makes in their OS, overnight gaps are accepted, and an overdue run simply fires on wake (the clamped anchor above). In container mode the runs proceed as normal but the toast itself is a silent no-op (FR-30) — results are simply waiting in the queue.
 
 ### Multi-role support
 
@@ -612,9 +618,9 @@ If you apply across very different domains, add a `profiles` table. Each profile
 
 LinkedIn actively detects and rate-limits automated access. The guest API is unauthenticated, so the exposure is **IP-based** throttling or temporary blocking, not an account suspension (there is no account). Keep request rates modest, set a realistic `User-Agent`, back off on `429`, and expect occasional empty or blocked responses. Failures surface in the `scrape_sessions` table as `failed` status with an error message. The Chain of Responsibility means a scraping failure is a clean boundary error rather than silent database corruption. If the guest endpoints get IP-blocked, switch the strategy to Proxycurl.
 
-### Local server and TeX Live required for PDF operations
+### TeX Live required for PDF operations
 
-Preview and approval both shell out to `pdflatex`, so a working TeX Live distribution (MiKTeX on Windows, MacTeX on macOS) must be installed on the same machine as the Node server. There is no separate backend to keep alive anymore — if the app is running, the compile path is available — but if `pdflatex` is not on `PATH`, compiles fail and the error surfaces in the UI with the status unchanged. Scoring and the rewrite stream do not depend on LaTeX and work regardless.
+Preview and approval both shell out to `pdflatex`, so a working TeX distribution (TeX Live on Linux, MiKTeX on Windows, MacTeX on macOS) must be available to the Node server — the Docker image ships one (see Deployment), so this concerns native runs. There is no separate backend to keep alive anymore — if the app is running, the compile path is available — but if `pdflatex` is not on `PATH`, compiles fail and the error surfaces in the UI with the status unchanged. Scoring and the rewrite stream do not depend on LaTeX and work regardless.
 
 ### Approval errors are surfaced but the file may exist on disk
 
@@ -695,21 +701,92 @@ Cost is a snapshot computed at write time by `estimateCostUsd` — a pure functi
 
 ---
 
+## Deployment (Docker)
+
+The self-hosted distribution (FR-29) is a single app image plus a compose file that brings up the whole stack in one command. Nothing about the architecture changes — it is still one Next.js process and one SQLite file — the container simply packages the runtime dependencies (Node, TeX Live) and wires up the Ollama sidecar. Native runs (see Local Dev Setup) remain fully supported.
+
+### Image contents
+
+`Dockerfile` is a two-stage build on `node:22-bookworm-slim`:
+
+- **Stage 1 (build)** installs the `better-sqlite3` native-module toolchain (`python3 make g++` for node-gyp, in case no prebuilt binary matches), runs `npm ci` and `next build`, then prunes to production dependencies.
+- **Stage 2 (runtime)** installs a **mid-size TeX Live** (~1.7 GB installed: `texlive-latex-recommended` + `texlive-latex-extra` + `texlive-fonts-recommended` — covers real-world resume templates without the ~6 GB `texlive-full`) and copies in the built app: `.next`, production `node_modules` (native binding included), `next.config.mjs`, and the committed `resume-example/` starters (the zero-config fallback for `lib/resume/load`, FR-32). The user's private `resume/` is gitignored *and* `.dockerignore`d, so personal assets are never baked into an image — they are bind-mounted at run time.
+
+The container runs as the non-root `node` user. Inside the image the server starts with `next start -H 0.0.0.0` — the host reaches it through Docker's port mapping, so the in-container bind must be open; the localhost-only invariant (NFR-10) moves to the compose port publication below. (The repo's plain `npm start` keeps `-H 127.0.0.1` for native runs.)
+
+**Extending the TeX image** for exotic packages: Debian's TeX Live has no usable `tlmgr`, so add further Debian collections in a derived image:
+
+```dockerfile
+FROM jobfinder
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      texlive-science texlive-fonts-extra && rm -rf /var/lib/apt/lists/*
+USER node
+```
+
+### Environment-variable contract
+
+Baked into the image (the in-container filesystem layout; override only if you know why):
+
+| Variable | Baked value | Meaning |
+|----------|-------------|---------|
+| `JOBFINDER_CONTAINER` | `1` | Container mode (`lib/env/container.ts`): host-OS integrations degrade gracefully (FR-30, below). |
+| `JOBFINDER_DB_PATH` | `/data/jobfinder.db` | The SQLite file (`lib/db`). Mount `/data` to persist. |
+| `JOBFINDER_OUTPUT_DIR` | `/output` | Base directory for approved resume packages (`lib/http/guards`, PathBuilder). Mount `/output` to receive them. |
+
+Not needed in-container: `JOBFINDER_PDFLATEX_PATH` (`lib/latex/sandbox` defaults to `pdflatex`, which the image puts on `PATH`).
+
+Provided at run time — via `.env` on the host (`cp .env.example .env`), never baked into an image layer:
+
+| Variable | Required | Meaning |
+|----------|----------|---------|
+| `ANTHROPIC_API_KEY` | yes | Rewrite + explanation (Sonnet), and scoring only when the Anthropic backend is selected. Server-side only (NFR-7); compose fails fast with a clear message when unset. |
+| `RAPID_API_KEY` | no | The Greenhouse aggregator key (FR-5a). Blank disables that source. |
+| `OLLAMA_MODEL` | no | The model tag the one-shot pull init fetches (default `qwen3:4b-instruct-2507-q4_K_M`; the higher-accuracy override is `batiai/qwen3.6-27b:iq3` — see `docs/scoring-model-eval.md`). |
+
+Set by the compose file itself: `OLLAMA_BASE_URL=http://ollama:11434` — the FR-31 endpoint resolver (`lib/env/ollama.ts`, single resolution point, default `http://127.0.0.1:11434`) pointed at the sidecar by service name on the compose network.
+
+### Sidecar topology and volumes
+
+`docker-compose.yml` defines three services and three mounts:
+
+- **`app`** — the image above, built from the repo (`build: .`). Publishes exactly one port, **`127.0.0.1:3000:3000`**: the app has no auth, so the "not reachable beyond the host" invariant (NFR-10) lives in this mapping — the port is invisible to the LAN, and remote access is the user's own VPN/SSH tunnel.
+- **`ollama`** — the local-scoring sidecar (`ollama/ollama`). Publishes **no ports at all**; only the app and the pull init reach it over the compose-internal network.
+- **`ollama-pull`** — a one-shot init service: waits for the sidecar, then pulls `OLLAMA_MODEL` into the model volume unless it is already present (`ollama show` succeeding), so the multi-GB download happens exactly once.
+
+| Mount | Type | Purpose |
+|-------|------|---------|
+| `jobfinder-data:/data` | named volume | The SQLite file. Survives `docker compose down`; only `down -v` deletes it. |
+| `ollama-models:/root/.ollama` | named volume | The Ollama model store — the ~2.5 GB pull persists across restarts. |
+| `./output:/output` | host bind | Approved resume packages land directly on the host. |
+| `./resume:/app/resume` (read-only, optional) | host bind | The user's private resume assets; each file missing there falls back to the committed `resume-example/` (FR-32). |
+
+### Container-mode behavior (FR-30)
+
+`JOBFINDER_CONTAINER=1` degrades the two host-OS integrations, one boundary check per module (`isContainerMode()`):
+
+- **Open folder** (`/api/open-folder`, FR-24): no file manager exists in the container, so the route skips the spawn and returns `{ opened: false, dir }` — the path still read from SQLite and containment-verified — and the Tracker UI copies the path to the clipboard instead of opening it.
+- **Desktop toasts** (`fireNotifier`, FR-28): the notifier returns silently before any spawn, covering both the `/api/notify` route and the scheduler runner. Scheduled runs themselves are unaffected — results wait in the queue.
+
+Everything else — scraping, scoring against the sidecar, the rewrite stream, compile/save with the one-page gate, the scheduler — behaves identically to a native run. With the flag unset, native behavior is unchanged.
+
+---
+
 ## Local Dev Setup
 
 ### Prerequisites
 
-Install the following before starting: Node.js 18 or later (which runs the whole app), a TeX Live distribution (MiKTeX on Windows, MacTeX on macOS) with `pdflatex` on `PATH`, and — for the default local scoring backend — [Ollama](https://ollama.com) with the scoring model pulled (`ollama pull qwen3:4b-instruct-2507-q4_K_M`, or whatever tag Setup names); skip Ollama entirely if you select the Anthropic backend in Setup. The npm dependencies do the rest: `better-sqlite3` (the database — no separate server to install or run), `cheerio` (HTML parsing for the scraper), `pdf-lib` (the PDF page-count check), and `p-limit` (the scoring concurrency pool). No browser or headless-Chromium binary is required — the guest-API scraper is plain `fetch` + `cheerio`.
+This section is the **native** (non-Docker) run — for the one-command containerized stack see Deployment (Docker) above, which packages all of these prerequisites. Install the following before starting: Node.js 18 or later (which runs the whole app), a TeX distribution (TeX Live on Linux, MiKTeX on Windows, MacTeX on macOS) with `pdflatex` on `PATH`, and — for the default local scoring backend — [Ollama](https://ollama.com) with the scoring model pulled (`ollama pull qwen3:4b-instruct-2507-q4_K_M`, or whatever tag Setup names); skip Ollama entirely if you select the Anthropic backend in Setup. The npm dependencies do the rest: `better-sqlite3` (the database — no separate server to install or run), `cheerio` (HTML parsing for the scraper), `pdf-lib` (the PDF page-count check), and `p-limit` (the scoring concurrency pool). No browser or headless-Chromium binary is required — the guest-API scraper is plain `fetch` + `cheerio`.
 
 ### The single process
 
 One process runs the whole app. The Next.js server runs on port 3000 (`next dev` in development, `next start` in production) and serves the UI, every `app/api/` route handler, and the streaming `/api/rewrite`, `/api/score`, and `/api/scrape` routes. It performs the scraping, scoring, PDF compilation, file saving, and all database access in-process. The Anthropic API key lives in `.env.local` and never leaves the server.
 
-Bind the server to `127.0.0.1` so nothing else on the network can reach the routes that run `pdflatex` on untrusted input or touch the local file system. Because the whole app is one process, there is no second port to open and no inter-service trust boundary to defend.
+The app has no authentication, so it must not be reachable beyond the host (NFR-10): nothing else on the network may reach the routes that run `pdflatex` on untrusted input or touch the local file system. Natively that means binding the server to `127.0.0.1` — which `npm start` does (`next start -H 127.0.0.1`); in Docker the equivalent is the compose port mapping publishing `127.0.0.1:3000` only (see Deployment). Because the whole app is one process, there is no second port to open and no inter-service trust boundary to defend.
 
 ### Environment variables
 
-All configuration lives in one `.env.local`: the Anthropic API key (required for rewrite/explain/salary, and for scoring only when the Anthropic backend is selected), the path to the SQLite database file, the output base directory for saved PDFs, a Proxycurl API key (only if you use that scraper strategy), and `RAPID_API_KEY` (the fantastic.jobs Active Jobs DB aggregator key, required only when the Greenhouse source is enabled — FR-5a). `RAPID_API_KEY` is read **server-side only** and never sent to the client; the browser sees at most a boolean "present" indicator. Despite the name, this is a **direct fantastic.jobs / Zuplo data-API key** used with `Authorization: Bearer` against `data.fantastic.jobs`, not a RapidAPI marketplace key (see "Strategy D — Greenhouse (aggregator)"). The local scoring backend needs no key — it talks to the Ollama daemon at `127.0.0.1:11434`.
+All native-run configuration lives in one `.env.local`: `ANTHROPIC_API_KEY` (required for rewrite/explain/salary, and for scoring only when the Anthropic backend is selected), `JOBFINDER_DB_PATH` (the SQLite database file), `JOBFINDER_OUTPUT_DIR` (the output base directory for saved PDFs), optionally `JOBFINDER_PDFLATEX_PATH` (only when `pdflatex` is not on `PATH`), `OLLAMA_BASE_URL` (only when Ollama is not at the `http://127.0.0.1:11434` default — FR-31), a Proxycurl API key (only if you use that scraper strategy), and `RAPID_API_KEY` (the fantastic.jobs Active Jobs DB aggregator key, required only when the Greenhouse source is enabled — FR-5a). `RAPID_API_KEY` is read **server-side only** and never sent to the client; the browser sees at most a boolean "present" indicator. Despite the name, this is a **direct fantastic.jobs / Zuplo data-API key** used with `Authorization: Bearer` against `data.fantastic.jobs`, not a RapidAPI marketplace key (see "Strategy D — Greenhouse (aggregator)"). The local scoring backend needs no key — it talks to the Ollama daemon at `OLLAMA_BASE_URL` (default `http://127.0.0.1:11434`).
 
 ### Database setup
 
@@ -723,4 +800,4 @@ Scoring each job on the default local backend: ~5-8.5k prompt tokens and a few h
 
 ---
 
-*JobFinder v3.0 — Next.js · TypeScript · SQLite · Claude Sonnet 5 + Haiku 4.5 · LaTeX*
+*JobFinder v3.1 — Next.js · TypeScript · SQLite · Claude Sonnet 5 + Haiku 4.5 · LaTeX*
