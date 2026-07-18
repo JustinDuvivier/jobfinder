@@ -24,20 +24,27 @@ It runs on your own machine, for one person: one Next.js process, one SQLite fil
 
 Prerequisites: Docker with Compose (on Windows/macOS: start **Docker Desktop** first), and an [Anthropic API key](https://console.anthropic.com/).
 
-The same commands work in Windows PowerShell and the macOS/Linux terminal:
+Copy-paste the block for your OS — the editor step opens `.env` and waits; put your key after `ANTHROPIC_API_KEY=`, save, close the editor, and the stack starts.
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/JustinDuvivier/jobfinder.git
+cd jobfinder
+cp .env.example .env
+Start-Process notepad .env -Wait    # paste your key after ANTHROPIC_API_KEY=  then save and close Notepad
+docker compose up
+```
+
+**macOS / Linux (Terminal):**
 
 ```sh
 git clone https://github.com/JustinDuvivier/jobfinder.git
 cd jobfinder
 cp .env.example .env
+nano .env    # paste your key after ANTHROPIC_API_KEY=  then Ctrl+O, Enter, Ctrl+X
 docker compose up
 ```
-
-Before `docker compose up`, open `.env` and set `ANTHROPIC_API_KEY`:
-
-- **Windows:** `notepad .env`
-- **macOS:** `open -e .env` (TextEdit) — or `nano .env` in the terminal
-- **Linux:** `nano .env`
 
 Then open **http://127.0.0.1:3000**.
 
