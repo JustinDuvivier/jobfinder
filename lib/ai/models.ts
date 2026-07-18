@@ -29,6 +29,48 @@ export const SCORING_MODEL = 'claude-haiku-4-5-20251001';
  * Settings (user_config.ollama_model).
  */
 export const DEFAULT_OLLAMA_MODEL = 'qwen3:4b-instruct-2507-q4_K_M';
+/** The higher-accuracy tuned 27B local option (docs/scoring-model-eval.md). */
+export const LARGE_OLLAMA_MODEL = 'batiai/qwen3.6-27b:iq3';
+
+/** One curated local scoring model as the Settings dropdown presents it (FR-6b). */
+export interface CuratedOllamaModel {
+  /** The exact Ollama tag the backend pulls and scores with. */
+  tag: string;
+  /** Short human name shown in the dropdown. */
+  label: string;
+  /** Approximate download size, shown so the user consents to the pull. */
+  pullSize: string;
+  /** Hardware guidance (RAM/GPU) shown alongside the option. */
+  hardware: string;
+  /** Exactly one curated model is the recommended default. */
+  recommended: boolean;
+}
+
+/**
+ * The curated local models the Settings scoring dropdown offers (FR-6b), in
+ * display order. Both are pinned by the golden-set eval in
+ * docs/scoring-model-eval.md; anything else goes through the custom-tag
+ * escape hatch, which keeps the any-tag capability.
+ */
+export const CURATED_OLLAMA_MODELS = [
+  {
+    tag: DEFAULT_OLLAMA_MODEL,
+    label: 'Qwen3 4B Instruct — small, recommended',
+    pullSize: '~2.5 GB download',
+    hardware: 'runs on CPU-only machines (~5 GB RAM)',
+    recommended: true,
+  },
+  {
+    tag: LARGE_OLLAMA_MODEL,
+    label: 'Tuned Qwen3.6 27B — higher accuracy',
+    pullSize: '~11 GB download',
+    hardware: 'wants a ~16 GB GPU; slow on CPU',
+    recommended: false,
+  },
+] as const satisfies readonly CuratedOllamaModel[];
+
+/** The literal union of curated tags (used by the Settings choice mapping). */
+export type CuratedOllamaTag = (typeof CURATED_OLLAMA_MODELS)[number]['tag'];
 /**
  * Ollama context window for scoring. Sized from measured data, not the eval's
  * 8192: the stable prefix is ~5.5k tokens and the longest captured real

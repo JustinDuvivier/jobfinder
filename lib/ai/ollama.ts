@@ -54,7 +54,12 @@ export function buildOllamaScoreBody(model: string, input: ScoreInput) {
   };
 }
 
-async function ollamaFetch(path: string, body: unknown): Promise<Response> {
+/**
+ * The single Ollama HTTP transport (POST JSON to `${OLLAMA_BASE_URL}${path}`),
+ * shared with the model-management module (lib/ai/ollama-pull.ts) so every
+ * call site resolves the endpoint and reports unreachability the same way.
+ */
+export async function ollamaFetch(path: string, body: unknown): Promise<Response> {
   const baseUrl = getOllamaBaseUrl();
   try {
     return await fetch(`${baseUrl}${path}`, {
@@ -65,7 +70,7 @@ async function ollamaFetch(path: string, body: unknown): Promise<Response> {
   } catch (err) {
     throw new Error(
       `Ollama server unreachable at ${baseUrl} — is it running? ` +
-        `(Scoring is set to the local backend in Settings.) ${(err as Error).message}`,
+        `(Set OLLAMA_BASE_URL if it runs elsewhere.) ${(err as Error).message}`,
     );
   }
 }

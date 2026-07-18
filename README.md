@@ -66,11 +66,14 @@ Don't have a LaTeX resume? Start from the prefilled example (`resume-example/bas
 
 ## Scoring backends
 
-Scoring (the high-frequency AI call) is configurable in the app's Setup page:
+Scoring (the high-frequency AI call) is one curated dropdown on the app's Setup page. Each local option shows whether the model is already installed on the connected Ollama, and an uninstalled one offers an in-app **Download** button (a server-side `ollama pull` with live progress) — no terminal needed:
 
 - **Local Ollama — the default, $0.** Runs `qwen3:4b-instruct-2507-q4_K_M` on the compose sidecar: a ~2.5 GB model that runs on CPU-only machines in roughly 5 GB of RAM (budget ~8 GB free for comfort; a GPU makes it faster but is not required). Chosen by a reproducible evaluation against the repo's golden scoring set — method and results in [`docs/scoring-model-eval.md`](docs/scoring-model-eval.md).
-- **Higher-accuracy local override.** With a ~16 GB GPU you can run the tuned 27B instead: set `OLLAMA_MODEL=batiai/qwen3.6-27b:iq3` in `.env` before first start (so the init service pre-pulls it — ~11 GB), then enter the same tag in Setup → Ollama model. Eval numbers for both models are in the same doc.
-- **Anthropic (Claude Haiku).** Select the Anthropic backend in Setup to score via the API instead — no local model needed, small per-job cost, uses your existing `ANTHROPIC_API_KEY`.
+- **Higher-accuracy local option.** With a ~16 GB GPU, pick the tuned 27B (`batiai/qwen3.6-27b:iq3`) in the same dropdown and click **Download** (~11 GB; slow on CPU-only machines). Compose alternative: set `OLLAMA_MODEL=batiai/qwen3.6-27b:iq3` in `.env` before first start and the init service pre-pulls it instead. Eval numbers for both models are in the same doc.
+- **Claude (Anthropic Haiku).** Score via the API instead — no local model needed, small per-job cost, uses your existing `ANTHROPIC_API_KEY`.
+- **Custom Ollama tag.** An escape option for any other tag Ollama can pull — save it, and the same installed check and Download button apply.
+
+Ollama down, out of disk, or a bad tag? The download reports a clear error in Settings and nothing else breaks; scoring with a model that is not installed fails loudly with instructions, exactly as before.
 
 Either way, the resume **rewrite** and change **explanation** always run on Claude (Sonnet), which is why the Anthropic key is required.
 
