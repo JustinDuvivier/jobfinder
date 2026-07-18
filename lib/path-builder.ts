@@ -16,6 +16,7 @@
  * same folder (an intentional overwrite, FR-20).
  */
 import { createHash } from 'node:crypto';
+import { sep } from 'node:path';
 
 /** Windows MAX_PATH. The full path is kept strictly under this. */
 const MAX_PATH = 260;
@@ -100,12 +101,14 @@ export function disambiguator(jobId: string): string {
   return createHash('sha256').update(jobId).digest('hex').slice(0, DISAMBIGUATOR_LENGTH);
 }
 
-function joinWin(...parts: string[]): string {
-  // Server is Windows; join with backslashes, avoiding doubled separators.
+function joinSegments(...parts: string[]): string {
+  // Join with the platform separator (backslash on Windows, slash in the Linux
+  // container), avoiding doubled separators. Segment *names* are still held to
+  // the stricter Windows rules by sanitizeSegment so output stays portable.
   return parts
     .map((p, i) => (i === 0 ? p.replace(/[\\/]+$/, '') : p.replace(/^[\\/]+|[\\/]+$/g, '')))
     .filter((p) => p.length > 0)
-    .join('\\');
+    .join(sep);
 }
 
 /**
@@ -128,7 +131,7 @@ export function buildResumePath(input: PathBuilderInput): BuiltPath {
   // Reserve room so the full path stays under MAX_PATH. The job folder is
   // `${companyTitle}_${suffix}`; everything else is fixed-length here.
   const fixedLength =
-    joinWin(input.baseDir, dateFolder).length +
+    joinSegments(input.baseDir, dateFolder).length +
     1 /* separator before job folder */ +
     `_${suffix}`.length +
     1 /* separator before filename */ +
@@ -140,9 +143,9 @@ export function buildResumePath(input: PathBuilderInput): BuiltPath {
 
   const jobFolder = companyTitle.length > 0 ? `${companyTitle}_${suffix}` : suffix;
 
-  const dir = joinWin(input.baseDir, dateFolder, jobFolder);
-  const filePath = joinWin(dir, fileName);
-  const relativePath = joinWin(dateFolder, jobFolder, fileName);
+  const dir = joinSegments(input.baseDir, dateFolder, jobFolder);
+  const filePath = joinSegments(dir, fileName);
+  const relativePath = joinSegments(dateFolder, jobFolder, fileName);
 
   return { dir, filePath, relativePath, dateFolder, jobFolder, fileName };
 }

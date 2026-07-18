@@ -1,0 +1,27 @@
+# Build artifacts (rebuilt inside the image)
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# VCS
+.git
+
+# Personal data — must never enter the image
+resume
+.env*
+*.db
+*.db-shm
+*.db-wal
+output
+scripts/eval-score-results.json
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+
+# OS noise
+.DS_Store
+Thumbs.db

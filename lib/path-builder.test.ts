@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { sep } from 'node:path';
 import {
   buildResumePath,
   sanitizeSegment,
@@ -91,14 +92,17 @@ describe('buildResumePath — golden path', () => {
   const suffix = disambiguator('4012345678');
 
   it('produces the documented layout', () => {
+    // Segments join with the platform separator (backslash on Windows, slash
+    // in the Linux container) — the segment names themselves are identical
+    // everywhere.
     expect(built.dateFolder).toBe('20260618');
     expect(built.jobFolder).toBe(`Stripe_AI_Engineer_${suffix}`);
     expect(built.fileName).toBe('Alex_Candidate_Resume.pdf');
     expect(built.filePath).toBe(
-      `${BASE}\\20260618\\Stripe_AI_Engineer_${suffix}\\Alex_Candidate_Resume.pdf`,
+      `${BASE}${sep}20260618${sep}Stripe_AI_Engineer_${suffix}${sep}Alex_Candidate_Resume.pdf`,
     );
     expect(built.relativePath).toBe(
-      `20260618\\Stripe_AI_Engineer_${suffix}\\Alex_Candidate_Resume.pdf`,
+      `20260618${sep}Stripe_AI_Engineer_${suffix}${sep}Alex_Candidate_Resume.pdf`,
     );
   });
 });
