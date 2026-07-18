@@ -7,7 +7,7 @@ function freshDb(): DB {
 }
 
 describe('schema application', () => {
-  it('creates all eight tables', () => {
+  it('creates all nine tables', () => {
     const db = freshDb();
     const tables = db
       .prepare(
@@ -23,6 +23,7 @@ describe('schema application', () => {
         'blocked_companies',
         'command_history',
         'jobs',
+        'resume_assets',
         'resume_changes',
         'rewritten_latex_versions',
         'scrape_sessions',
@@ -79,6 +80,79 @@ describe('migrate (databases created before a column existed)', () => {
 
     // Running again is a no-op (columns already present).
     expect(() => migrate(db)).not.toThrow();
+  });
+});
+
+describe('FR-33 migration — legacy asset columns and the onboarding flag', () => {
+  /** A user_config table as it existed before FR-33, with the asset columns. */
+  function legacyDb(): DB {
+    const db = new Database(':memory:');
+    db.exec(`CREATE TABLE user_config (
+      id              INTEGER PRIMARY KEY CHECK (id = 1),
+      resume_latex    TEXT NOT NULL DEFAULT '',
+      source_of_truth TEXT NOT NULL DEFAULT '',
+      scoring_prompt  TEXT NOT NULL DEFAULT '',
+      rewrite_rules   TEXT NOT NULL DEFAULT ''
+    );`);
+    return db as DB;
+  }
+
+  it('moves non-empty legacy assets into resume_assets and blanks the columns', () => {
+    const db = legacyDb();
+    db.prepare(
+      `INSERT INTO user_config (id, resume_latex, source_of_truth) VALUES (1, 'MY TEX', 'MY SOT')`,
+    ).run();
+
+    applySchema(db); // creates resume_assets; keeps the legacy user_config
+    migrate(db);
+
+    const assets = db.prepare(`SELECT name, content FROM resume_assets ORDER BY name`).all();
+    // Blank legacy columns (scoring_prompt, rewrite_rules) are NOT copied —
+    // empty meant "use the file fallback", which is now the absent row.
+    expect(assets).toEqual([
+      { name: 'base_resume', content: 'MY TEX' },
+      { name: 'source_of_truth', content: 'MY SOT' },
+    ]);
+    const cfg = db.prepare(`SELECT resume_latex AS r, source_of_truth AS s FROM user_config`).get() as {
+      r: string;
+      s: string;
+    };
+    expect(cfg).toEqual({ r: '', s: '' }); // blanked — the copy is one-shot
+  });
+
+  it('never overwrites an existing resume_assets row and never resurrects a reverted one', () => {
+    const db = legacyDb();
+    db.prepare(`INSERT INTO user_config (id, resume_latex) VALUES (1, 'OLD TEX')`).run();
+    applySchema(db);
+    db.prepare(`INSERT INTO resume_assets (name, content) VALUES ('base_resume', 'NEW TEX')`).run();
+
+    migrate(db);
+    expect(
+      (db.prepare(`SELECT content AS c FROM resume_assets WHERE name = 'base_resume'`).get() as { c: string }).c,
+    ).toBe('NEW TEX'); // authored row wins over the legacy column
+
+    // Revert (row delete) then restart: the blanked legacy column must not
+    // bring the old content back.
+    db.prepare(`DELETE FROM resume_assets WHERE name = 'base_resume'`).run();
+    migrate(db);
+    expect(db.prepare(`SELECT 1 FROM resume_assets WHERE name = 'base_resume'`).get()).toBeUndefined();
+  });
+
+  it('grandfathers existing installs past onboarding; fresh databases start at 0', () => {
+    const legacy = legacyDb();
+    legacy.prepare(`INSERT INTO user_config (id) VALUES (1)`).run();
+    applySchema(legacy);
+    migrate(legacy);
+    expect(
+      (legacy.prepare(`SELECT onboarding_complete AS o FROM user_config`).get() as { o: number }).o,
+    ).toBe(1);
+
+    const fresh = freshDb();
+    fresh.prepare(`INSERT INTO user_config (id) VALUES (1)`).run();
+    migrate(fresh); // a second run must not flip the fresh default
+    expect(
+      (fresh.prepare(`SELECT onboarding_complete AS o FROM user_config`).get() as { o: number }).o,
+    ).toBe(0);
   });
 });
 

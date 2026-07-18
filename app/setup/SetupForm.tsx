@@ -42,18 +42,12 @@ function fromLines(text: string): string[] {
 export function SetupForm({
   config,
   blocklist,
-  defaults,
   rapidApiKeyPresent,
 }: {
   config: UserConfig | null;
   blocklist: string[];
-  defaults: { resumeLatex: string; sourceOfTruth: string; scoringPrompt: string; rewriteRules: string };
   rapidApiKeyPresent: boolean;
 }) {
-  const [resumeLatex, setResumeLatex] = useState(config?.resumeLatex ?? defaults.resumeLatex);
-  const [sourceOfTruth, setSourceOfTruth] = useState(config?.sourceOfTruth ?? defaults.sourceOfTruth);
-  const [scoringPrompt, setScoringPrompt] = useState(config?.scoringPrompt || defaults.scoringPrompt);
-  const [rewriteRules, setRewriteRules] = useState(config?.rewriteRules || defaults.rewriteRules);
   const [runIntervalMinutes, setRunIntervalMinutes] = useState(config?.runIntervalMinutes ?? 0);
   const [searchLookbackHours, setSearchLookbackHours] = useState(config?.searchLookbackHours ?? 1);
   const [scoreThreshold, setScoreThreshold] = useState(config?.scoreThreshold ?? 50);
@@ -85,8 +79,6 @@ export function SetupForm({
     setBanner(null);
     try {
       await postJson('/api/config', {
-        resumeLatex,
-        sourceOfTruth,
         ownerName,
         scraperStrategy,
         greenhouseEnabled,
@@ -94,8 +86,6 @@ export function SetupForm({
         keywords: fromLines(keywords),
         locations: fromLines(locations),
         excludedTitleTerms: fromLines(excludedTitleTerms),
-        scoringPrompt,
-        rewriteRules,
         runIntervalMinutes,
         searchLookbackHours,
         scoreThreshold,
@@ -143,16 +133,6 @@ export function SetupForm({
   return (
     <div>
       <div className="card">
-        <label>
-          Resume — LaTeX source <span className="hint">(the canonical document; never overwritten by the AI)</span>
-        </label>
-        <textarea rows={10} className="mono" value={resumeLatex} onChange={(e) => setResumeLatex(e.target.value)} />
-
-        <label>
-          Source of Truth <span className="hint">(real accomplishments, metrics, skills — the AI draws only from this)</span>
-        </label>
-        <textarea rows={8} value={sourceOfTruth} onChange={(e) => setSourceOfTruth(e.target.value)} />
-
         <div className="split">
           <div>
             <label>Owner name <span className="hint">(used in the PDF filename)</span></label>
@@ -268,12 +248,6 @@ export function SetupForm({
             />
           </div>
         </div>
-
-        <label>Scoring prompt <span className="hint">(overrides resume/scoring_prompt.md)</span></label>
-        <textarea rows={10} className="mono" value={scoringPrompt} onChange={(e) => setScoringPrompt(e.target.value)} />
-
-        <label>Rewrite rules / prompt <span className="hint">(overrides resume/rewrite_rules.md)</span></label>
-        <textarea rows={14} className="mono" value={rewriteRules} onChange={(e) => setRewriteRules(e.target.value)} />
 
         {banner && <div className={`banner ${banner.ok ? 'banner-ok' : 'banner-err'}`}>{banner.text}</div>}
         <div className="row" style={{ marginTop: '1rem' }}>

@@ -1,88 +1,45 @@
 /**
- * effectiveConfig resolution tests: DB config wins when a field is non-empty,
- * an empty/blank field falls back to the authored resume/ asset, and a missing
- * resume/ folder degrades to whatever the config holds instead of throwing.
- * loadResumeAssets is mocked — the file-reading itself is covered by
- * resume/load.test.ts.
+ * Tests for the effective-config adapter: the camelCase mapping over the
+ * per-asset resolution, and the broken-checkout fallback to empty strings.
+ * resolveResumeAssets is mocked — the three-layer resolution itself (in-app →
+ * resume/ file → example) is covered by lib/resume/load.test.ts.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { CONFIG } from '../test-fixtures';
-import type { UserConfig } from '../types';
+import type { DB } from '../db';
 
-const { loadResumeAssetsMock } = vi.hoisted(() => ({ loadResumeAssetsMock: vi.fn() }));
-vi.mock('../resume/load', () => ({ loadResumeAssets: loadResumeAssetsMock }));
+const { resolveMock } = vi.hoisted(() => ({ resolveMock: vi.fn() }));
+vi.mock('../resume/load', () => ({ resolveResumeAssets: resolveMock }));
 
 import { effectiveConfig } from './effective';
 
-const ASSETS = {
-  baseResume: 'file resume',
-  sourceOfTruth: 'file truth',
-  scoringPrompt: 'file scoring prompt',
-  rewriteRules: 'file rewrite rules',
-};
-
-function config(overrides: Partial<UserConfig> = {}): UserConfig {
-  return {
-    ...CONFIG,
-    resumeLatex: 'db resume',
-    sourceOfTruth: 'db truth',
-    scoringPrompt: 'db scoring prompt',
-    rewriteRules: 'db rewrite rules',
-    ...overrides,
-  };
-}
+const DB_STUB = {} as DB;
 
 beforeEach(() => {
-  loadResumeAssetsMock.mockReset();
-  loadResumeAssetsMock.mockReturnValue(ASSETS);
+  resolveMock.mockReset();
 });
 
 describe('effectiveConfig', () => {
-  it('prefers DB config over file assets for every field', () => {
-    expect(effectiveConfig(config())).toEqual({
-      resumeLatex: 'db resume',
-      sourceOfTruth: 'db truth',
-      scoringPrompt: 'db scoring prompt',
-      rewriteRules: 'db rewrite rules',
+  it('maps each resolved asset to its camelCase field', () => {
+    resolveMock.mockReturnValue({
+      base_resume: { content: 'tex', provenance: 'in-app' },
+      source_of_truth: { content: 'truth', provenance: 'file' },
+      scoring_prompt: { content: 'score', provenance: 'example' },
+      rewrite_rules: { content: 'rules', provenance: 'example' },
     });
+    expect(effectiveConfig(DB_STUB)).toEqual({
+      resumeLatex: 'tex',
+      sourceOfTruth: 'truth',
+      scoringPrompt: 'score',
+      rewriteRules: 'rules',
+    });
+    expect(resolveMock).toHaveBeenCalledWith(DB_STUB);
   });
 
-  it('falls back to file assets when there is no config row', () => {
-    expect(effectiveConfig(undefined)).toEqual({
-      resumeLatex: 'file resume',
-      sourceOfTruth: 'file truth',
-      scoringPrompt: 'file scoring prompt',
-      rewriteRules: 'file rewrite rules',
-    });
-  });
-
-  it('falls back per field: empty or blank config fields use the asset, set fields win', () => {
-    const result = effectiveConfig(config({ resumeLatex: '', scoringPrompt: '   \n' }));
-    expect(result).toEqual({
-      resumeLatex: 'file resume',
-      sourceOfTruth: 'db truth',
-      scoringPrompt: 'file scoring prompt',
-      rewriteRules: 'db rewrite rules',
-    });
-  });
-
-  it('survives missing resume/ assets by relying on config alone', () => {
-    loadResumeAssetsMock.mockImplementation(() => {
+  it('returns empty strings when resolution throws (broken checkout)', () => {
+    resolveMock.mockImplementation(() => {
       throw new Error('Missing resume asset: resume/base_resume.tex');
     });
-    expect(effectiveConfig(config())).toEqual({
-      resumeLatex: 'db resume',
-      sourceOfTruth: 'db truth',
-      scoringPrompt: 'db scoring prompt',
-      rewriteRules: 'db rewrite rules',
-    });
-  });
-
-  it('yields empty fields when assets are missing and config is empty too', () => {
-    loadResumeAssetsMock.mockImplementation(() => {
-      throw new Error('Missing resume asset: resume/base_resume.tex');
-    });
-    expect(effectiveConfig(undefined)).toEqual({
+    expect(effectiveConfig(DB_STUB)).toEqual({
       resumeLatex: '',
       sourceOfTruth: '',
       scoringPrompt: '',

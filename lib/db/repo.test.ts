@@ -14,7 +14,6 @@ beforeEach(() => {
 
 const CONFIG: UserConfig = {
   ...BASE_CONFIG,
-  resumeLatex: '\\documentclass{article}',
   keywords: ['AI Engineer', 'ML Engineer'],
   locations: ['New York', 'New Jersey'],
   runIntervalMinutes: 30,
@@ -46,6 +45,60 @@ describe('user_config', () => {
     expect(config.keywords).toEqual(['Solutions Engineer']);
     const count = (db.prepare(`SELECT COUNT(*) AS n FROM user_config`).get() as { n: number }).n;
     expect(count).toBe(1);
+  });
+});
+
+describe('onboarding flag (FR-33)', () => {
+  it('is false with no config row, and set by setOnboardingComplete (creating the row)', () => {
+    expect(repo.isOnboardingComplete(db)).toBe(false);
+    repo.setOnboardingComplete(db);
+    expect(repo.isOnboardingComplete(db)).toBe(true);
+    const count = (db.prepare(`SELECT COUNT(*) AS n FROM user_config`).get() as { n: number }).n;
+    expect(count).toBe(1);
+  });
+
+  it('survives a later Setup save (upsertUserConfig never touches it)', () => {
+    repo.setOnboardingComplete(db);
+    repo.upsertUserConfig(db, CONFIG);
+    expect(repo.isOnboardingComplete(db)).toBe(true);
+  });
+
+  it('stays false when Setup is saved without finishing the flow', () => {
+    repo.upsertUserConfig(db, CONFIG);
+    expect(repo.isOnboardingComplete(db)).toBe(false);
+  });
+});
+
+describe('resume_assets (FR-33)', () => {
+  it('is empty until an asset is authored, then round-trips per asset', () => {
+    expect(repo.getResumeAssets(db)).toEqual({});
+    repo.setResumeAsset(db, 'base_resume', '\\documentclass{article}');
+    repo.setResumeAsset(db, 'scoring_prompt', 'score it');
+    expect(repo.getResumeAssets(db)).toEqual({
+      base_resume: '\\documentclass{article}',
+      scoring_prompt: 'score it',
+    });
+  });
+
+  it('overwrites on re-save (one row per asset)', () => {
+    repo.setResumeAsset(db, 'base_resume', 'v1');
+    repo.setResumeAsset(db, 'base_resume', 'v2');
+    expect(repo.getResumeAssets(db).base_resume).toBe('v2');
+    const count = (db.prepare(`SELECT COUNT(*) AS n FROM resume_assets`).get() as { n: number }).n;
+    expect(count).toBe(1);
+  });
+
+  it('deleteResumeAsset removes only the named asset (the per-file revert)', () => {
+    repo.setResumeAsset(db, 'base_resume', 'tex');
+    repo.setResumeAsset(db, 'rewrite_rules', 'rules');
+    repo.deleteResumeAsset(db, 'rewrite_rules');
+    expect(repo.getResumeAssets(db)).toEqual({ base_resume: 'tex' });
+  });
+
+  it('rejects unknown asset names via the CHECK constraint', () => {
+    expect(() =>
+      db.prepare(`INSERT INTO resume_assets (name, content) VALUES ('cover_letter', 'x')`).run(),
+    ).toThrow(/CHECK constraint/i);
   });
 });
 
@@ -252,8 +305,9 @@ describe('getLastScrapeEndedAt', () => {
 });
 
 describe('resetPipeline', () => {
-  it('wipes all jobs and scrape sessions but keeps config and the blocklist', () => {
+  it('wipes all jobs and scrape sessions but keeps config, assets, and the blocklist', () => {
     repo.upsertUserConfig(db, CONFIG);
+    repo.setResumeAsset(db, 'base_resume', 'MY TEX');
     repo.addBlockedCompany(db, 'Acme');
     const insert = db.prepare(
       `INSERT INTO jobs (job_id, company, title, url, status) VALUES (?, 'C', 'T', 'u', ?)`,
@@ -270,6 +324,7 @@ describe('resetPipeline', () => {
     ).toBe(0);
     // Preserved.
     expect(repo.getUserConfig(db)).toEqual(CONFIG);
+    expect(repo.getResumeAssets(db)).toEqual({ base_resume: 'MY TEX' });
     expect(repo.listBlockedCompanies(db)).toEqual(['acme']);
   });
 

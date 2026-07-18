@@ -98,7 +98,7 @@ export default function HomePage() {
 
       {!configured && (
         <div className="banner banner-warn">
-          No configuration yet — set your resume and Source of Truth in <a href="/setup">Settings</a> to arm the pipeline.
+          Settings not saved yet — the pipeline runs on defaults. Review your search keywords and documents in <a href="/setup">Settings</a>.
         </div>
       )}
 

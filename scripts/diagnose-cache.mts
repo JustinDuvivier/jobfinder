@@ -31,9 +31,17 @@ const dbPath = process.env.JOBFINDER_DB_PATH;
 if (!dbPath) throw new Error('JOBFINDER_DB_PATH not set');
 
 const db = new Database(dbPath, { readonly: true });
-const cfg = db
-  .prepare('SELECT resume_latex, source_of_truth, scoring_prompt FROM user_config LIMIT 1')
-  .get() as { resume_latex?: string; source_of_truth?: string; scoring_prompt?: string } | undefined;
+// In-app-authored assets (FR-33); tolerate a database that predates the table.
+let inApp: Record<string, string> = {};
+try {
+  const rows = db.prepare('SELECT name, content FROM resume_assets').all() as Array<{
+    name: string;
+    content: string;
+  }>;
+  inApp = Object.fromEntries(rows.map((r) => [r.name, r.content]));
+} catch {
+  // resume_assets does not exist yet — fall back to the files.
+}
 db.close();
 
 const asset = (f: string) => fs.readFileSync(path.join('resume', f), 'utf8');
@@ -41,9 +49,9 @@ const pick = (v: string | undefined, fallback: string) =>
   v && v.trim().length > 0 ? v : fallback;
 
 const input = {
-  systemPrompt: pick(cfg?.scoring_prompt, asset('scoring_prompt.md')),
-  sourceOfTruth: pick(cfg?.source_of_truth, asset('source_of_truth.md')),
-  resumePlainText: latexToPlainText(pick(cfg?.resume_latex, asset('base_resume.tex'))),
+  systemPrompt: pick(inApp.scoring_prompt, asset('scoring_prompt.md')),
+  sourceOfTruth: pick(inApp.source_of_truth, asset('source_of_truth.md')),
+  resumePlainText: latexToPlainText(pick(inApp.base_resume, asset('base_resume.tex'))),
   jobDescription:
     'Title: Software Engineer\nCompany: DiagnosticCo\nLocation: Remote\n\n' +
     'Sample posting used only to compare cache behavior. Requires 3+ years of experience with TypeScript and SQL.',

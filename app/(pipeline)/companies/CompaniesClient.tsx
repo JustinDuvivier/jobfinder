@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { JobStatus } from '@/lib/types';
 import { canOpenRewrite } from '@/lib/status/transitions';
-import { postJson } from '../sse-client';
+import { postJson } from '@/app/sse-client';
 
 export interface CompanyJob {
   id: number;

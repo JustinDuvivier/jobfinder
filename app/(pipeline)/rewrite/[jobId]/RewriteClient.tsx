@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { JobStatus } from '@/lib/types';
 import { hasEdits, type DiffBlock } from '@/lib/diff';
 import { canApprove, canPass } from '@/lib/status/transitions';
-import { postSse, postJson } from '../../sse-client';
+import { postSse, postJson } from '@/app/sse-client';
 
 interface RewriteJob {
   id: number;

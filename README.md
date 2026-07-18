@@ -43,24 +43,26 @@ Where your data lives:
 | `./output/` on your machine | Approved resume PDFs, as `YYYYMMDD/Company_Title_xxxxxx/Owner_Resume.pdf`. |
 | `./resume/` on your machine (optional) | Your private resume assets, mounted read-only into the app. Gitignored — never committed, never baked into the image. |
 
-Try it end to end before personalizing anything: the app works out of the box with a committed example resume for a generic "Alex Candidate", so you can scrape, score, rewrite, and save a PDF immediately.
+On first start the app walks you through a short guided setup: you paste **your** one-page LaTeX resume into an editor prefilled with the committed example (for a generic "Alex Candidate"), and it is accepted once it compiles to exactly one page. The three companion documents — scoring prompt, rewrite rules, source of truth — work as-is out of the box and are optional steps you can customize then or later, in the app. After that you can scrape, score, rewrite, and save a PDF immediately.
 
 ## Your resume (the one requirement)
 
 JobFinder **tailors an existing LaTeX resume** — it does not author one from scratch, and the output PDF must compile to exactly one page (the app refuses to save anything longer).
 
-Drop your own files into `./resume/` (create the directory next to `docker-compose.yml`):
+The normal path is the first-run flow above: supply the resume in the app (it is stored in the SQLite database, so it survives restarts), and edit it — or any companion document — any time under **Settings → Documents**, where each document shows where it currently comes from and can be reverted to its default per file.
 
-| File | Purpose |
+The documents:
+
+| Document | Purpose |
 |------|---------|
-| `base_resume.tex` | Your one-page LaTeX resume — the document the AI tailors. |
-| `source_of_truth.md` | Your real accomplishments, metrics, and skills. Rewrites may only draw from this — it is the anti-fabrication boundary. |
-| `scoring_prompt.md` | The scoring system prompt (optional to customize). |
-| `rewrite_rules.md` | The tailoring rules for the rewrite (optional to customize). |
+| Base resume (`base_resume.tex`) | Your one-page LaTeX resume — the document the AI tailors. |
+| Source of truth (`source_of_truth.md`) | Your real accomplishments, metrics, and skills. Rewrites may only draw from this — it is the anti-fabrication boundary. Align it with what your resume actually claims, and keep an explicit years-of-experience figure in it — the scorer's gap logic reads it. |
+| Scoring prompt (`scoring_prompt.md`) | The scoring system prompt (works as-is; optional to customize). |
+| Rewrite rules (`rewrite_rules.md`) | The tailoring rules for the rewrite (works as-is; optional to customize). |
 
-Every file is optional: anything missing falls back, per file, to the committed starter in [`resume-example/`](resume-example/). The practical path is to copy `resume-example/` to `resume/` and replace the contents with your own. You can also paste all of these into the in-app Setup page instead — a non-empty Setup field takes precedence over the files.
+**Power-user path — mount files instead.** Drop your own files into `./resume/` (create the directory next to `docker-compose.yml`). Every file is optional and resolves per file: anything authored in-app wins, else your `resume/` file, else the committed starter in [`resume-example/`](resume-example/). The first-run flow auto-detects a mounted `resume/base_resume.tex` and confirms it instead of asking you to paste.
 
-Don't have a LaTeX resume? Start from `resume-example/base_resume.tex` — it is a deliberately simple, ATS-friendly one-page template using only universally available packages (`geometry`, `hyperref`, `enumitem`, `titlesec`). Keeping the template simple is also what keeps AI rewrites compiling reliably.
+Don't have a LaTeX resume? Start from the prefilled example (`resume-example/base_resume.tex`) — it is a deliberately simple, ATS-friendly one-page template using only universally available packages (`geometry`, `hyperref`, `enumitem`, `titlesec`). Keeping the template simple is also what keeps AI rewrites compiling reliably.
 
 ## Scoring backends
 

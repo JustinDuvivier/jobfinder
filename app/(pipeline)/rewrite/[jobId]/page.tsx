@@ -6,6 +6,7 @@
 import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import * as repo from '@/lib/db/repo';
+import { effectiveConfig } from '@/lib/config/effective';
 import { RewriteClient } from './RewriteClient';
 import { RewriteNav } from './RewriteNav';
 
@@ -23,7 +24,8 @@ export default async function RewritePage({
   const db = getDb();
   const job = repo.getJobById(db, id);
   if (!job) notFound();
-  const config = repo.getUserConfig(db);
+  // The effective base resume (in-app → resume/ file → example, FR-33).
+  const { resumeLatex } = effectiveConfig(db);
   // The persisted server-computed diff (FR-13) — written by /api/rewrite,
   // rendered by the Changes panel.
   const changes = repo.getResumeChanges(db, id);
@@ -64,8 +66,8 @@ export default async function RewritePage({
           explanation: job.explanation,
         }}
         changes={changes}
-        originalLatex={config?.resumeLatex ?? ''}
-        configured={config !== undefined}
+        originalLatex={resumeLatex}
+        configured={resumeLatex.trim().length > 0}
         nextRewriteId={nextRewriteId}
       />
     </main>

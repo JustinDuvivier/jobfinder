@@ -1,12 +1,11 @@
 /**
- * Resolves the effective prompts/resume the AI routes use: DB config (edited in
- * Settings) takes precedence; an empty field falls back to the authored asset in
- * resume/ (or, per file, the committed resume-example/ starter). This lets the
- * user edit everything from the UI while keeping the files as out-of-the-box
- * defaults.
+ * Resolves the effective prompts/resume the AI routes use, as one camelCase
+ * bundle over the per-asset resolution in lib/resume/load.ts: an in-app-
+ * authored asset (SQLite, FR-33) wins; else the user's `resume/` file; else
+ * the committed `resume-example/` starter (FR-32).
  */
-import type { UserConfig } from '../types';
-import { loadResumeAssets } from '../resume/load';
+import type { DB } from '../db';
+import { resolveResumeAssets } from '../resume/load';
 
 export interface EffectiveConfig {
   resumeLatex: string;
@@ -15,22 +14,18 @@ export interface EffectiveConfig {
   rewriteRules: string;
 }
 
-function pick(configured: string | undefined, fallback: string): string {
-  return configured && configured.trim().length > 0 ? configured : fallback;
-}
-
-export function effectiveConfig(config: UserConfig | undefined): EffectiveConfig {
-  let assets = { baseResume: '', sourceOfTruth: '', scoringPrompt: '', rewriteRules: '' };
+export function effectiveConfig(db: DB): EffectiveConfig {
   try {
-    assets = loadResumeAssets();
+    const assets = resolveResumeAssets(db);
+    return {
+      resumeLatex: assets.base_resume.content,
+      sourceOfTruth: assets.source_of_truth.content,
+      scoringPrompt: assets.scoring_prompt.content,
+      rewriteRules: assets.rewrite_rules.content,
+    };
   } catch {
-    // Neither resume/ nor the committed resume-example/ has the assets (a
-    // broken checkout) — rely on whatever is in config.
+    // An asset is missing from every layer (a broken checkout with nothing
+    // authored in-app). Empty strings let callers fail on their own terms.
+    return { resumeLatex: '', sourceOfTruth: '', scoringPrompt: '', rewriteRules: '' };
   }
-  return {
-    resumeLatex: pick(config?.resumeLatex, assets.baseResume),
-    sourceOfTruth: pick(config?.sourceOfTruth, assets.sourceOfTruth),
-    scoringPrompt: pick(config?.scoringPrompt, assets.scoringPrompt),
-    rewriteRules: pick(config?.rewriteRules, assets.rewriteRules),
-  };
 }

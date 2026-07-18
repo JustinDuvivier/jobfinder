@@ -1,5 +1,5 @@
 /**
- * The complete SQLite schema — eight tables — applied on first run when the
+ * The complete SQLite schema — nine tables — applied on first run when the
  * database file does not yet exist. Kept as a TS string rather than a loose
  * .sql file so it is bundler-safe inside Next's server runtime (no runtime
  * filesystem read of a non-bundled asset).
@@ -16,11 +16,13 @@ export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
--- Setup config (FR-25). Single row, pinned to id = 1.
+-- Setup config (FR-25). Single row, pinned to id = 1. The four resume assets
+-- are NOT columns here — they live in resume_assets (FR-33). Databases created
+-- before FR-33 carry vestigial resume_latex/source_of_truth/scoring_prompt/
+-- rewrite_rules columns; migrate() moves their content into resume_assets once
+-- and blanks them.
 CREATE TABLE IF NOT EXISTS user_config (
   id               INTEGER PRIMARY KEY CHECK (id = 1),
-  resume_latex     TEXT NOT NULL DEFAULT '',
-  source_of_truth  TEXT NOT NULL DEFAULT '',
   search_url       TEXT NOT NULL DEFAULT '',
   scraper_strategy TEXT NOT NULL DEFAULT 'demo'
                      CHECK (scraper_strategy IN ('demo','linkedin','proxycurl')),
@@ -34,9 +36,6 @@ CREATE TABLE IF NOT EXISTS user_config (
   -- Title-exclusion terms (FR-4a): whole-word matches drop over-senior postings
   -- that LinkedIn's leaky f_E filter lets through. Empty = no title filtering.
   excluded_title_terms TEXT NOT NULL DEFAULT '["senior","sr","staff","principal","lead","manager","director","head of","vp","chief","scientist"]',
-  -- Editable prompts; empty means "fall back to the resume/ file asset".
-  scoring_prompt   TEXT NOT NULL DEFAULT '',
-  rewrite_rules    TEXT NOT NULL DEFAULT '',
   -- Auto-run cadence in minutes while the app is open; 0 = manual only.
   run_interval_minutes INTEGER NOT NULL DEFAULT 0,
   -- Only scrape jobs posted within this many hours (LinkedIn f_TPR). Default 1.
@@ -49,8 +48,23 @@ CREATE TABLE IF NOT EXISTS user_config (
   scoring_backend  TEXT NOT NULL DEFAULT 'ollama'
                      CHECK (scoring_backend IN ('ollama','anthropic')),
   ollama_model     TEXT NOT NULL DEFAULT 'qwen3:4b-instruct-2507-q4_K_M',
+  -- First-run onboarding (FR-33): set to 1 when the guided flow is finished.
+  -- The pipeline gate also lifts once a user base resume exists (DB or file).
+  onboarding_complete INTEGER NOT NULL DEFAULT 0 CHECK (onboarding_complete IN (0,1)),
   created_at       TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- In-app-authored resume assets (FR-33) — the top layer of the per-file
+-- resolution in-app (this table) → resume/ file → resume-example/ starter.
+-- A row exists only for an asset authored in the app; deleting it reverts that
+-- asset to the file/example fallback. The name CHECK mirrors RESUME_ASSET_NAMES
+-- in lib/types.ts — keep the two in sync.
+CREATE TABLE IF NOT EXISTS resume_assets (
+  name       TEXT PRIMARY KEY CHECK (name IN
+               ('base_resume','source_of_truth','scoring_prompt','rewrite_rules')),
+  content    TEXT NOT NULL,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 -- Primary table. job_id is the LinkedIn posting id (dedup key, FR-3);

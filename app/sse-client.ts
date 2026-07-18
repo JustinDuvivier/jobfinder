@@ -35,14 +35,26 @@ export async function postSse(
   }
 }
 
-/** POST JSON and return the parsed response, throwing on a non-2xx with its error. */
-export async function postJson<T = unknown>(url: string, body: unknown): Promise<T> {
+/** Send JSON and return the parsed response, throwing on a non-2xx with its error. */
+async function requestJson<T>(method: 'POST' | 'PUT' | 'DELETE', url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((data as { error?: string }).error ?? 'Request failed');
   return data as T;
+}
+
+export function postJson<T = unknown>(url: string, body: unknown): Promise<T> {
+  return requestJson<T>('POST', url, body);
+}
+
+export function putJson<T = unknown>(url: string, body: unknown): Promise<T> {
+  return requestJson<T>('PUT', url, body);
+}
+
+export function deleteJson<T = unknown>(url: string, body: unknown): Promise<T> {
+  return requestJson<T>('DELETE', url, body);
 }

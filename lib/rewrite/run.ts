@@ -49,7 +49,7 @@ export async function runRewrite(
   // this arm fires only when the status changed in between (the race fallback).
   if (!canEdit(job.status)) return { kind: 'not_editable', status: job.status };
 
-  const eff = effectiveConfig(repo.getUserConfig(db));
+  const eff = effectiveConfig(db);
   const request = buildRewriteRequest({
     systemPrompt: eff.rewriteRules,
     resumeLatex: eff.resumeLatex,

@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import type { Job, JobSource } from '@/lib/types';
 import { canContinue, canPass } from '@/lib/status/transitions';
 import { sourceBadge } from '@/lib/jobs/source-badge';
-import { postSse, postJson } from '../sse-client';
+import { postSse, postJson } from '@/app/sse-client';
 import { formatCountdown } from '@/lib/countdown';
-import { ScoreReason } from '../components/score-reason';
-import { EditableSalary } from '../components/editable-salary';
+import { ScoreReason } from '@/app/components/score-reason';
+import { EditableSalary } from '@/app/components/editable-salary';
 
 /** Mirror of lib/scrape/run.ts SourceScrapeCounts — the per-source counts the
  *  scrape `done` SSE event carries. Kept local so no server module is imported
@@ -602,7 +602,7 @@ export function JobsClient({
     <div>
       {!configured && (
         <div className="banner banner-warn">
-          No configuration yet — add your resume and Source of Truth in <a href="/setup">Settings</a> before scoring or rewriting.
+          Settings not saved yet — scraping and scoring run on defaults. Review your search keywords in <a href="/setup">Settings</a>.
         </div>
       )}
       <div className="card">

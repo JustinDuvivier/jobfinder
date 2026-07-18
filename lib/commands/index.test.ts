@@ -182,7 +182,8 @@ describe('ApproveRewriteCommand', () => {
 const RESUME = 'name: Alex\nskills: TypeScript';
 
 function seedResumeConfig(): void {
-  repo.upsertUserConfig(db, { ...CONFIG, resumeLatex: RESUME });
+  repo.upsertUserConfig(db, CONFIG);
+  repo.setResumeAsset(db, 'base_resume', RESUME);
 }
 
 describe('RecordRewriteCommand — first generation vs regeneration', () => {

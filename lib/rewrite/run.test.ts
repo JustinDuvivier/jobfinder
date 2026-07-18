@@ -32,7 +32,9 @@ function seedJob(status: JobStatus = 'rewriting'): number {
 }
 
 function seedConfig(): void {
-  repo.upsertUserConfig(db, { ...CONFIG, resumeLatex: RESUME, rewriteRules: RULES });
+  repo.upsertUserConfig(db, CONFIG);
+  repo.setResumeAsset(db, 'base_resume', RESUME);
+  repo.setResumeAsset(db, 'rewrite_rules', RULES);
 }
 
 /** A fake Anthropic client whose stream yields the given tokens and resolves

@@ -9,6 +9,7 @@ import type {
   JobStatus,
   JobSource,
   CommandType,
+  ResumeAssetName,
   RewriteVersionSource,
   UserConfig,
   ScraperStrategyName,
@@ -203,9 +204,10 @@ export function clearDecisionQueue(db: DB): number {
 /**
  * Wipe all job and pipeline data for a fresh start: every job (which cascades to
  * resume_changes, rewritten_latex_versions, and command_history via ON DELETE
- * CASCADE) plus the scrape-session log. Deliberately preserves user_config
- * (resume, Source of Truth, prompts) and the company blocklist — "start fresh"
- * means fresh *jobs*, not re-doing Setup. Returns the number of jobs removed.
+ * CASCADE) plus the scrape-session log. Deliberately preserves user_config,
+ * the in-app resume assets (resume_assets), and the company blocklist —
+ * "start fresh" means fresh *jobs*, not re-doing Setup. Returns the number of
+ * jobs removed.
  */
 export function resetPipeline(db: DB): number {
   const tx = db.transaction(() => {
@@ -475,8 +477,6 @@ export function getLastScrapeEndedAt(db: DB): number | null {
 // --- user_config (the single Setup row, id = 1) ---
 
 interface UserConfigRow {
-  resume_latex: string;
-  source_of_truth: string;
   search_url: string;
   scraper_strategy: ScraperStrategyName;
   greenhouse_enabled: number;
@@ -484,8 +484,6 @@ interface UserConfigRow {
   keywords: string;
   locations: string;
   excluded_title_terms: string;
-  scoring_prompt: string;
-  rewrite_rules: string;
   run_interval_minutes: number;
   search_lookback_hours: number;
   score_threshold: number;
@@ -510,8 +508,6 @@ export function getUserConfig(db: DB): UserConfig | undefined {
     | undefined;
   if (!row) return undefined;
   return {
-    resumeLatex: row.resume_latex,
-    sourceOfTruth: row.source_of_truth,
     searchUrl: row.search_url,
     scraperStrategy: row.scraper_strategy,
     greenhouseEnabled: row.greenhouse_enabled !== 0,
@@ -519,8 +515,6 @@ export function getUserConfig(db: DB): UserConfig | undefined {
     keywords: parseStringArray(row.keywords),
     locations: parseStringArray(row.locations),
     excludedTitleTerms: parseStringArray(row.excluded_title_terms),
-    scoringPrompt: row.scoring_prompt,
-    rewriteRules: row.rewrite_rules,
     runIntervalMinutes: row.run_interval_minutes,
     searchLookbackHours: row.search_lookback_hours,
     scoreThreshold: row.score_threshold,
@@ -529,17 +523,16 @@ export function getUserConfig(db: DB): UserConfig | undefined {
   };
 }
 
-/** Insert or update the single Setup config row (id = 1). */
+/** Insert or update the single Setup config row (id = 1). Never touches the
+ *  onboarding flag — that is setOnboardingComplete's job. */
 export function upsertUserConfig(db: DB, config: UserConfig): void {
   db.prepare(
     `INSERT INTO user_config
-       (id, resume_latex, source_of_truth, search_url, scraper_strategy, greenhouse_enabled, owner_name, keywords, locations,
-        excluded_title_terms, scoring_prompt, rewrite_rules, run_interval_minutes, search_lookback_hours,
+       (id, search_url, scraper_strategy, greenhouse_enabled, owner_name, keywords, locations,
+        excluded_title_terms, run_interval_minutes, search_lookback_hours,
         score_threshold, scoring_backend, ollama_model, updated_at)
-     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
-       resume_latex = excluded.resume_latex,
-       source_of_truth = excluded.source_of_truth,
        search_url = excluded.search_url,
        scraper_strategy = excluded.scraper_strategy,
        greenhouse_enabled = excluded.greenhouse_enabled,
@@ -547,8 +540,6 @@ export function upsertUserConfig(db: DB, config: UserConfig): void {
        keywords = excluded.keywords,
        locations = excluded.locations,
        excluded_title_terms = excluded.excluded_title_terms,
-       scoring_prompt = excluded.scoring_prompt,
-       rewrite_rules = excluded.rewrite_rules,
        run_interval_minutes = excluded.run_interval_minutes,
        search_lookback_hours = excluded.search_lookback_hours,
        score_threshold = excluded.score_threshold,
@@ -556,8 +547,6 @@ export function upsertUserConfig(db: DB, config: UserConfig): void {
        ollama_model = excluded.ollama_model,
        updated_at = datetime('now')`,
   ).run(
-    config.resumeLatex,
-    config.sourceOfTruth,
     config.searchUrl,
     config.scraperStrategy,
     config.greenhouseEnabled ? 1 : 0,
@@ -565,14 +554,56 @@ export function upsertUserConfig(db: DB, config: UserConfig): void {
     JSON.stringify(config.keywords),
     JSON.stringify(config.locations),
     JSON.stringify(config.excludedTitleTerms),
-    config.scoringPrompt,
-    config.rewriteRules,
     config.runIntervalMinutes,
     config.searchLookbackHours,
     config.scoreThreshold,
     config.scoringBackend,
     config.ollamaModel,
   );
+}
+
+/** True once the guided first-run flow has been finished (FR-33). */
+export function isOnboardingComplete(db: DB): boolean {
+  const row = db
+    .prepare(`SELECT onboarding_complete AS done FROM user_config WHERE id = 1`)
+    .get() as { done: number } | undefined;
+  return row !== undefined && row.done !== 0;
+}
+
+/** Mark the guided first-run flow finished, creating the config row if needed
+ *  (every other column has a schema default). */
+export function setOnboardingComplete(db: DB): void {
+  db.prepare(
+    `INSERT INTO user_config (id, onboarding_complete) VALUES (1, 1)
+     ON CONFLICT(id) DO UPDATE SET onboarding_complete = 1, updated_at = datetime('now')`,
+  ).run();
+}
+
+// --- resume_assets (FR-33) ---
+
+/** Every in-app-authored asset, keyed by name. Absent key = not authored
+ *  in-app; that asset resolves to the resume/ file or example fallback. */
+export function getResumeAssets(db: DB): Partial<Record<ResumeAssetName, string>> {
+  const rows = db.prepare(`SELECT name, content FROM resume_assets`).all() as Array<{
+    name: ResumeAssetName;
+    content: string;
+  }>;
+  const assets: Partial<Record<ResumeAssetName, string>> = {};
+  for (const row of rows) assets[row.name] = row.content;
+  return assets;
+}
+
+/** Author (or re-author) one asset in-app — it now wins the resolution. */
+export function setResumeAsset(db: DB, name: ResumeAssetName, content: string): void {
+  db.prepare(
+    `INSERT INTO resume_assets (name, content) VALUES (?, ?)
+     ON CONFLICT(name) DO UPDATE SET content = excluded.content, updated_at = datetime('now')`,
+  ).run(name, content);
+}
+
+/** Revert one asset to its file/example fallback by dropping the in-app row. */
+export function deleteResumeAsset(db: DB, name: ResumeAssetName): void {
+  db.prepare(`DELETE FROM resume_assets WHERE name = ?`).run(name);
 }
 
 // --- blocked_companies (FR-4) ---

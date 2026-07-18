@@ -17,6 +17,6 @@ import { computeLatexDiff } from './index';
 
 /** Replace the job's stored diff with diff(effective base resume, rewrittenLatex). */
 export function refreshResumeDiff(db: DB, jobId: number, rewrittenLatex: string): void {
-  const { resumeLatex } = effectiveConfig(repo.getUserConfig(db));
+  const { resumeLatex } = effectiveConfig(db);
   repo.replaceResumeChanges(db, jobId, computeLatexDiff(resumeLatex, rewrittenLatex));
 }

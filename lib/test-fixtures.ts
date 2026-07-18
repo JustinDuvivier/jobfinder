@@ -2,8 +2,9 @@
  * Shared test fixtures: the canonical full UserConfig and the job-insert
  * helper, defined once so the shapes don't drift across per-file copies.
  * Tests spread-override individual fields as needed, e.g.
- * `{ ...CONFIG, resumeLatex: RESUME }`. Not a test file itself — vitest only
- * collects *.test.ts.
+ * `{ ...CONFIG, scoreThreshold: 0 }`; resume assets are seeded separately via
+ * `repo.setResumeAsset` (the in-app layer wins the FR-33 resolution). Not a
+ * test file itself — vitest only collects *.test.ts.
  */
 import type { DB } from '@/lib/db';
 import * as repo from '@/lib/db/repo';
@@ -12,8 +13,6 @@ import type { ScoreResult } from '@/lib/ai/score';
 
 /** A complete user config; tests override individual fields as needed. */
 export const CONFIG: UserConfig = {
-  resumeLatex: '\\documentclass{article}\\begin{document}Engineer\\end{document}',
-  sourceOfTruth: 'Shipped X.',
   searchUrl: '',
   scraperStrategy: 'linkedin',
   greenhouseEnabled: false,
@@ -21,8 +20,6 @@ export const CONFIG: UserConfig = {
   keywords: ['Engineer'],
   locations: ['New York'],
   excludedTitleTerms: ['senior', 'staff'],
-  scoringPrompt: 'Score the candidate.',
-  rewriteRules: 'Tailor minimally.',
   runIntervalMinutes: 0,
   searchLookbackHours: 2,
   // Transport tests mock the Anthropic client/scoreJob; backend-routing tests

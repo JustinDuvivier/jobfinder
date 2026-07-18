@@ -4,9 +4,9 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import type { Job, JobStatus } from '@/lib/types';
 import { TRACKER_STATUSES } from '@/lib/status/transitions';
 import { addWeeks, jobWeekKey, weekKeyOf, weekLabel } from '@/lib/week';
-import { postJson } from '../sse-client';
-import { ScoreReason } from '../components/score-reason';
-import { EditableSalary } from '../components/editable-salary';
+import { postJson } from '@/app/sse-client';
+import { ScoreReason } from '@/app/components/score-reason';
+import { EditableSalary } from '@/app/components/editable-salary';
 
 type TrackerJob = Pick<
   Job,

@@ -88,7 +88,7 @@ export interface PreparedScoring {
  * via a strategy that bypasses the pipeline, can still be sitting in `new`.)
  */
 function prepareScoring(db: DB, config: UserConfig | undefined, jobIds?: number[]): PreparedScoring {
-  const eff = effectiveConfig(config);
+  const eff = effectiveConfig(db);
   const scoreThreshold = config?.scoreThreshold ?? 50;
   const excludedTitleTerms = config?.excludedTitleTerms ?? [];
   const resumePlainText = latexToPlainText(eff.resumeLatex);

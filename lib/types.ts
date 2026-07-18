@@ -51,6 +51,24 @@ export type JobSource = 'linkedin' | 'greenhouse';
  *  model (default — zero marginal cost) or the Anthropic cheap tier. */
 export type ScoringBackendName = 'ollama' | 'anthropic';
 
+/**
+ * The four resume assets the pipeline runs on (FR-32/FR-33). The names double
+ * as the `resume_assets` primary key (mirrored by its CHECK constraint — keep
+ * the two in sync) and map to the on-disk filenames (`base_resume.tex`, the
+ * rest `<name>.md`).
+ */
+export const RESUME_ASSET_NAMES = [
+  'base_resume',
+  'source_of_truth',
+  'scoring_prompt',
+  'rewrite_rules',
+] as const;
+export type ResumeAssetName = (typeof RESUME_ASSET_NAMES)[number];
+
+/** Which layer an asset resolved from: authored in-app (SQLite) beats a user
+ *  file in `resume/` beats the committed `resume-example/` starter (FR-33). */
+export type ResumeAssetProvenance = 'in-app' | 'file' | 'example';
+
 /** The kinds of state-changing user actions recorded in command_history. */
 export type CommandType =
   | 'PassJob'
@@ -108,10 +126,10 @@ export interface Job {
 /** Fallback owner name (single-user tool) — also the schema column default. */
 export const DEFAULT_OWNER_NAME = 'Alex_Candidate';
 
-/** The single Setup configuration row (id = 1). */
+/** The single Setup configuration row (id = 1). The four resume assets are
+ *  deliberately NOT here — they live in `resume_assets` (FR-33) and resolve
+ *  through `lib/resume/load.ts`. */
 export interface UserConfig {
-  resumeLatex: string;
-  sourceOfTruth: string;
   /** Reserved for the Proxycurl strategy. */
   searchUrl: string;
   scraperStrategy: ScraperStrategyName;
@@ -125,10 +143,6 @@ export interface UserConfig {
   /** Whole-word title terms that drop over-senior postings before insert
    * (FR-4a); empty = no title filtering. */
   excludedTitleTerms: string[];
-  /** Override for the scoring prompt; empty = use resume/scoring_prompt.md. */
-  scoringPrompt: string;
-  /** Override for the rewrite rules; empty = use resume/rewrite_rules.md. */
-  rewriteRules: string;
   /** Auto-run cadence in minutes while the app is open; 0 = manual only. */
   runIntervalMinutes: number;
   /** Only scrape jobs posted within this many hours (LinkedIn f_TPR). */

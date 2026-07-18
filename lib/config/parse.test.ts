@@ -53,9 +53,8 @@ describe('parseUserConfig', () => {
   });
 
   it('coerces string fields, defaulting the owner name when blank', () => {
-    const parsed = config({ resumeLatex: '\\doc', ownerName: '  ' });
-    expect(parsed.resumeLatex).toBe('\\doc');
-    expect(parsed.sourceOfTruth).toBe('');
+    const parsed = config({ searchUrl: 'https://x', ownerName: '  ' });
+    expect(parsed.searchUrl).toBe('https://x');
     expect(parsed.ownerName).toBe('Alex_Candidate');
     expect(config({ ownerName: ' Jane_Doe ' }).ownerName).toBe('Jane_Doe');
   });

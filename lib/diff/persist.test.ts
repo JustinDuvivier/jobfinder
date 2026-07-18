@@ -12,7 +12,8 @@ let jobId: number;
 
 beforeEach(() => {
   db = openDatabase(':memory:');
-  repo.upsertUserConfig(db, { ...CONFIG, resumeLatex: RESUME });
+  repo.upsertUserConfig(db, CONFIG);
+  repo.setResumeAsset(db, 'base_resume', RESUME);
   const info = db
     .prepare(
       `INSERT INTO jobs (job_id, company, title, url, status) VALUES ('lk-1', 'Stripe', 'AI Engineer', 'https://x', 'rewriting')`,

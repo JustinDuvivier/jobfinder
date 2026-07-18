@@ -59,8 +59,6 @@ export function parseUserConfig(body: unknown): ParsedUserConfig {
   }
 
   const config: UserConfig = {
-    resumeLatex: String(raw.resumeLatex ?? ''),
-    sourceOfTruth: String(raw.sourceOfTruth ?? ''),
     searchUrl: String(raw.searchUrl ?? ''),
     scraperStrategy: strategy,
     greenhouseEnabled: raw.greenhouseEnabled === true,
@@ -68,8 +66,6 @@ export function parseUserConfig(body: unknown): ParsedUserConfig {
     keywords: asStringArray(raw.keywords),
     locations: asStringArray(raw.locations),
     excludedTitleTerms: asStringArray(raw.excludedTitleTerms),
-    scoringPrompt: String(raw.scoringPrompt ?? ''),
-    rewriteRules: String(raw.rewriteRules ?? ''),
     runIntervalMinutes: Math.max(0, Math.floor(Number(raw.runIntervalMinutes) || 0)),
     searchLookbackHours: Math.max(1, Math.floor(Number(raw.searchLookbackHours) || 1)),
     scoreThreshold: coerceScoreThreshold(raw.scoreThreshold),
