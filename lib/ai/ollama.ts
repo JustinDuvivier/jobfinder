@@ -16,6 +16,7 @@
  * `new` for the next run (see ensureOllamaModel, called before any scoring).
  */
 import type Anthropic from '@anthropic-ai/sdk';
+import { getOllamaBaseUrl } from '@/lib/env/ollama';
 import { OLLAMA_NUM_CTX, SCORING_MAX_TOKENS } from './models';
 import {
   buildScoreRequest,
@@ -24,10 +25,6 @@ import {
   type ScoreResult,
 } from './score';
 import { meterOllamaCall, type AiTelemetry, type OllamaUsage } from './telemetry';
-
-/** The server binds 127.0.0.1 (not localhost — Windows may resolve that to
- *  ::1, which Ollama does not listen on by default). */
-export const OLLAMA_BASE_URL = 'http://127.0.0.1:11434';
 
 export interface OllamaChatResponse extends OllamaUsage {
   message?: { content?: string; thinking?: string };
@@ -58,15 +55,16 @@ export function buildOllamaScoreBody(model: string, input: ScoreInput) {
 }
 
 async function ollamaFetch(path: string, body: unknown): Promise<Response> {
+  const baseUrl = getOllamaBaseUrl();
   try {
-    return await fetch(`${OLLAMA_BASE_URL}${path}`, {
+    return await fetch(`${baseUrl}${path}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
   } catch (err) {
     throw new Error(
-      `Ollama server unreachable at ${OLLAMA_BASE_URL} — is it running? ` +
+      `Ollama server unreachable at ${baseUrl} — is it running? ` +
         `(Scoring is set to the local backend in Settings.) ${(err as Error).message}`,
     );
   }

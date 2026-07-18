@@ -9,14 +9,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { openDatabase, type DB } from '@/lib/db';
 import { insertTestJob } from '@/lib/test-fixtures';
+import { DEFAULT_OLLAMA_BASE_URL } from '@/lib/env/ollama';
 import { OLLAMA_NUM_CTX, SCORING_MAX_TOKENS } from './models';
 import { buildScoreRequest, PARKED_REVIEW_SCORE, type ScoreInput } from './score';
-import {
-  buildOllamaScoreBody,
-  ensureOllamaModel,
-  scoreJobOllama,
-  OLLAMA_BASE_URL,
-} from './ollama';
+import { buildOllamaScoreBody, ensureOllamaModel, scoreJobOllama } from './ollama';
 
 const INPUT: ScoreInput = {
   systemPrompt: 'You are a job matching expert. Score the candidate.',
@@ -50,6 +46,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 describe('buildOllamaScoreBody', () => {
@@ -83,12 +80,35 @@ describe('scoreJobOllama', () => {
     fetchMock.mockResolvedValue(chatResponse());
     const result = await scoreJobOllama(MODEL, INPUT);
     expect(fetchMock).toHaveBeenCalledWith(
-      `${OLLAMA_BASE_URL}/api/chat`,
+      `${DEFAULT_OLLAMA_BASE_URL}/api/chat`,
       expect.objectContaining({ method: 'POST' }),
     );
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(buildOllamaScoreBody(MODEL, INPUT));
     expect(result.score).toBe(82);
     expect(result.reasoning).toBe('Strong fit.');
+  });
+
+  it('targets the OLLAMA_BASE_URL endpoint when set, for scoring and the model check', async () => {
+    vi.stubEnv('OLLAMA_BASE_URL', 'http://ollama-host:9999/');
+    fetchMock.mockResolvedValue(chatResponse());
+    await scoreJobOllama(MODEL, INPUT);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://ollama-host:9999/api/chat',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    await ensureOllamaModel(MODEL);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://ollama-host:9999/api/show',
+      expect.objectContaining({ method: 'POST' }),
+    );
+  });
+
+  it('names the configured endpoint in the unreachable-server error', async () => {
+    vi.stubEnv('OLLAMA_BASE_URL', 'http://ollama-host:9999');
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+    await expect(scoreJobOllama(MODEL, INPUT)).rejects.toThrow(
+      /unreachable at http:\/\/ollama-host:9999/,
+    );
   });
 
   it('applies the FR-6a park exactly as the Anthropic path would', async () => {
@@ -178,7 +198,7 @@ describe('ensureOllamaModel', () => {
     fetchMock.mockResolvedValue({ ok: true });
     await expect(ensureOllamaModel(MODEL)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith(
-      `${OLLAMA_BASE_URL}/api/show`,
+      `${DEFAULT_OLLAMA_BASE_URL}/api/show`,
       expect.objectContaining({ body: JSON.stringify({ model: MODEL }) }),
     );
   });

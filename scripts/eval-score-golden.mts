@@ -11,7 +11,8 @@
  *   qwen   — a local Ollama model (same system+user text, temperature 0).
  *
  * Run:  npx tsx scripts/eval-score-golden.mts [haiku] [sonnet] [qwen]   (default: haiku qwen)
- * Env:  ANTHROPIC_API_KEY via .env.local; Ollama at localhost:11434.
+ * Env:  ANTHROPIC_API_KEY via .env.local; Ollama at OLLAMA_BASE_URL
+ *       (default: the local endpoint — lib/env/ollama.ts).
  *
  * Prompts come from the resume/ asset files. The app itself scores with the
  * *effective* config — a non-empty stored user_config row overrides the assets
@@ -41,6 +42,7 @@ import {
   REWRITE_MODEL,
   SCORING_MAX_TOKENS,
 } from '../lib/ai/models';
+import { getOllamaBaseUrl } from '../lib/env/ollama';
 import { latexToPlainText } from '../lib/latex/to-plain-text';
 import { describeJob } from '../lib/jobs/describe';
 import { resolveSalary } from '../lib/salary';
@@ -62,7 +64,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_SCORE_MODEL ?? DEFAULT_OLLAMA_MODEL;
  */
 const OLLAMA_THINK: boolean | string =
   process.env.OLLAMA_SCORE_THINK !== undefined ? process.env.OLLAMA_SCORE_THINK : false;
-const OLLAMA_URL = 'http://localhost:11434/api/chat';
+const OLLAMA_URL = `${getOllamaBaseUrl()}/api/chat`;
 
 type Range = [number, number];
 
