@@ -10,7 +10,7 @@ import { DEFAULT_OWNER_NAME } from '@/lib/types';
 import type { UserConfig, ScraperStrategyName, ScoringBackendName } from '@/lib/types';
 import { DEFAULT_OLLAMA_MODEL } from '@/lib/ai/models';
 
-const STRATEGIES: readonly ScraperStrategyName[] = ['demo', 'linkedin', 'proxycurl'];
+const STRATEGIES: readonly ScraperStrategyName[] = ['demo', 'linkedin'];
 const BACKENDS: readonly ScoringBackendName[] = ['ollama', 'anthropic'];
 
 const DEFAULT_SCORE_THRESHOLD = 50;
@@ -59,7 +59,6 @@ export function parseUserConfig(body: unknown): ParsedUserConfig {
   }
 
   const config: UserConfig = {
-    searchUrl: String(raw.searchUrl ?? ''),
     scraperStrategy: strategy,
     greenhouseEnabled: raw.greenhouseEnabled === true,
     ownerName: String(raw.ownerName ?? '').trim() || DEFAULT_OWNER_NAME,

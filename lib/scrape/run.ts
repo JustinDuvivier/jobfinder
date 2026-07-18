@@ -82,7 +82,6 @@ interface SourceRun {
 interface SourceRunDeps {
   keywords: string[];
   locations: string[];
-  searchUrl: string | null;
   blocked: Set<string>;
   excludedTitleTerms: string[];
   onJob?: (job: InsertedJob) => void;
@@ -99,7 +98,7 @@ async function runSource(
   { strategy, source }: SourceRun,
   deps: SourceRunDeps,
 ): Promise<SourceScrapeCounts> {
-  const sessionId = repo.createScrapeSession(db, strategy.name, deps.searchUrl);
+  const sessionId = repo.createScrapeSession(db, strategy.name);
   let found = 0;
   let blocked = 0;
   let inserted = 0;
@@ -212,7 +211,7 @@ function buildSourceRuns(
 
 export async function runScrape(db: DB, opts: RunScrapeOptions = {}): Promise<ScrapeSummary> {
   const config = repo.getUserConfig(db);
-  const strategyName = config?.scraperStrategy ?? 'demo';
+  const strategyName = config?.scraperStrategy ?? 'linkedin';
   const keywords = config?.keywords.length ? config.keywords : [...DEFAULT_KEYWORDS];
   const locations = config?.locations.length ? config.locations : [...DEFAULT_LOCATIONS];
 
@@ -236,7 +235,6 @@ export async function runScrape(db: DB, opts: RunScrapeOptions = {}): Promise<Sc
   const deps: SourceRunDeps = {
     keywords,
     locations,
-    searchUrl: config?.searchUrl ?? null,
     blocked,
     excludedTitleTerms,
     onJob: opts.onJob,

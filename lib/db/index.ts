@@ -82,6 +82,16 @@ export function migrate(db: DB): void {
   // CHECK omitted for ALTER (as above); the column default + app-level 0/1 writes
   // keep it well-formed on already-created databases.
   addConfig('greenhouse_enabled', `greenhouse_enabled INTEGER NOT NULL DEFAULT 0`);
+  // Proxycurl was removed as a selectable strategy (it was never implemented);
+  // coerce a stored legacy value to the LinkedIn guest default so parse and the
+  // strategy factory never see a now-invalid name. Idempotent — the UPDATE
+  // matches nothing once coerced, and other stored choices are untouched. The
+  // column-presence guard covers pre-strategy-column databases.
+  if (configColumns.includes('scraper_strategy')) {
+    db.exec(
+      `UPDATE user_config SET scraper_strategy = 'linkedin' WHERE scraper_strategy = 'proxycurl'`,
+    );
+  }
   // FR-33 onboarding flag. A database that predates the column belongs to a
   // user who already ran the app, so grandfather them past the guided flow —
   // the flag defaults to 0 only for genuinely fresh databases.

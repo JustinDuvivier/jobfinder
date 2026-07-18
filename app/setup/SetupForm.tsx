@@ -62,7 +62,7 @@ export function SetupForm({
   const [scoreThreshold, setScoreThreshold] = useState(config?.scoreThreshold ?? 50);
   const [ownerName, setOwnerName] = useState(config?.ownerName ?? DEFAULT_OWNER_NAME);
   const [scraperStrategy, setScraperStrategy] = useState<ScraperStrategyName>(
-    config?.scraperStrategy ?? 'demo',
+    config?.scraperStrategy ?? 'linkedin',
   );
   const [greenhouseEnabled, setGreenhouseEnabled] = useState(config?.greenhouseEnabled ?? false);
   const [scoringChoice, setScoringChoice] = useState<ScoringChoice>(
@@ -75,7 +75,6 @@ export function SetupForm({
   const [modelStatus, setModelStatus] = useState<OllamaModelsStatus | null>(null);
   const [pullError, setPullError] = useState<string | null>(null);
   const [startingPull, setStartingPull] = useState(false);
-  const [searchUrl, setSearchUrl] = useState(config?.searchUrl ?? '');
   const [keywords, setKeywords] = useState(toLines(config?.keywords ?? DEFAULT_KEYWORDS));
   const [locations, setLocations] = useState(toLines(config?.locations ?? DEFAULT_LOCATIONS));
   const [excludedTitleTerms, setExcludedTitleTerms] = useState(
@@ -137,7 +136,6 @@ export function SetupForm({
         ownerName,
         scraperStrategy,
         greenhouseEnabled,
-        searchUrl,
         keywords: fromLines(keywords),
         locations: fromLines(locations),
         excludedTitleTerms: fromLines(excludedTitleTerms),
@@ -225,7 +223,6 @@ export function SetupForm({
             <select value={scraperStrategy} onChange={(e) => setScraperStrategy(e.target.value as ScraperStrategyName)}>
               <option value="demo">Demo (static sample jobs)</option>
               <option value="linkedin">LinkedIn guest API</option>
-              <option value="proxycurl">Proxycurl</option>
             </select>
             <label className="row" style={{ marginTop: '0.75rem', gap: '0.5rem' }}>
               <input
@@ -265,9 +262,6 @@ export function SetupForm({
           value={excludedTitleTerms}
           onChange={(e) => setExcludedTitleTerms(e.target.value)}
         />
-
-        <label>Proxycurl search URL <span className="hint">(only used by the Proxycurl strategy)</span></label>
-        <input value={searchUrl} onChange={(e) => setSearchUrl(e.target.value)} placeholder="https://www.linkedin.com/jobs/search/?..." />
 
         <div className="split">
           <div>

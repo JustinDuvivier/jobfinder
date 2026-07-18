@@ -434,10 +434,10 @@ export function deleteCommand(db: DB, id: number): void {
 // --- scrape_sessions ---
 
 /** Open a scrape session row in 'running' state; returns its id. */
-export function createScrapeSession(db: DB, strategy: string, searchUrl: string | null): number {
+export function createScrapeSession(db: DB, strategy: string): number {
   const info = db
-    .prepare(`INSERT INTO scrape_sessions (strategy, search_url, status) VALUES (?, ?, 'running')`)
-    .run(strategy, searchUrl);
+    .prepare(`INSERT INTO scrape_sessions (strategy, status) VALUES (?, 'running')`)
+    .run(strategy);
   return Number(info.lastInsertRowid);
 }
 
@@ -477,7 +477,6 @@ export function getLastScrapeEndedAt(db: DB): number | null {
 // --- user_config (the single Setup row, id = 1) ---
 
 interface UserConfigRow {
-  search_url: string;
   scraper_strategy: ScraperStrategyName;
   greenhouse_enabled: number;
   owner_name: string;
@@ -508,7 +507,6 @@ export function getUserConfig(db: DB): UserConfig | undefined {
     | undefined;
   if (!row) return undefined;
   return {
-    searchUrl: row.search_url,
     scraperStrategy: row.scraper_strategy,
     greenhouseEnabled: row.greenhouse_enabled !== 0,
     ownerName: row.owner_name,
@@ -528,12 +526,11 @@ export function getUserConfig(db: DB): UserConfig | undefined {
 export function upsertUserConfig(db: DB, config: UserConfig): void {
   db.prepare(
     `INSERT INTO user_config
-       (id, search_url, scraper_strategy, greenhouse_enabled, owner_name, keywords, locations,
+       (id, scraper_strategy, greenhouse_enabled, owner_name, keywords, locations,
         excluded_title_terms, run_interval_minutes, search_lookback_hours,
         score_threshold, scoring_backend, ollama_model, updated_at)
-     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+     VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
-       search_url = excluded.search_url,
        scraper_strategy = excluded.scraper_strategy,
        greenhouse_enabled = excluded.greenhouse_enabled,
        owner_name = excluded.owner_name,
@@ -547,7 +544,6 @@ export function upsertUserConfig(db: DB, config: UserConfig): void {
        ollama_model = excluded.ollama_model,
        updated_at = datetime('now')`,
   ).run(
-    config.searchUrl,
     config.scraperStrategy,
     config.greenhouseEnabled ? 1 : 0,
     config.ownerName,

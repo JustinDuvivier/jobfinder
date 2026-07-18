@@ -41,7 +41,7 @@ export const JOB_STATUSES: readonly JobStatus[] = [
 ] as const;
 
 /** The scraper Strategy implementations selectable in Setup (FR-1, FR-25). */
-export type ScraperStrategyName = 'demo' | 'linkedin' | 'proxycurl';
+export type ScraperStrategyName = 'demo' | 'linkedin';
 
 /** Which site a job row was scraped from. Assigned at insert time; defaults to
  *  'linkedin' so existing rows and the LinkedIn/demo path are unaffected. */
@@ -130,8 +130,6 @@ export const DEFAULT_OWNER_NAME = 'Alex_Candidate';
  *  deliberately NOT here — they live in `resume_assets` (FR-33) and resolve
  *  through `lib/resume/load.ts`. */
 export interface UserConfig {
-  /** Reserved for the Proxycurl strategy. */
-  searchUrl: string;
   scraperStrategy: ScraperStrategyName;
   /** Orthogonal toggle; Greenhouse runs alongside the primary strategy. */
   greenhouseEnabled: boolean;

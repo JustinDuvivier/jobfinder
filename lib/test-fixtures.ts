@@ -13,7 +13,6 @@ import type { ScoreResult } from '@/lib/ai/score';
 
 /** A complete user config; tests override individual fields as needed. */
 export const CONFIG: UserConfig = {
-  searchUrl: '',
   scraperStrategy: 'linkedin',
   greenhouseEnabled: false,
   ownerName: 'Alex_Candidate',

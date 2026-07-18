@@ -1,9 +1,9 @@
 /**
  * Scraper Strategy interface and factory.
  *
- * The scraper has genuinely different implementations — static demo data, an
- * HTTP client against LinkedIn's guest job API, and the Proxycurl paid API —
- * with different dependencies and failure modes. Each satisfies the same
+ * The scraper has genuinely different implementations — static demo data and
+ * an HTTP client against LinkedIn's guest job API (the default) — with
+ * different dependencies and failure modes. Each satisfies the same
  * interface: given the saved searches and a maximum count, yield job records;
  * and, separately, fetch the per-job detail used to enrich a surviving job.
  *
@@ -59,13 +59,6 @@ export function createStrategy(
       return new DemoStrategy();
     case 'linkedin':
       return new LinkedInStrategy(options.linkedin);
-    case 'proxycurl':
-      // Documented fallback: switch to it only if the guest endpoints get
-      // IP-blocked or volume outgrows safe request rates. Implement when needed.
-      throw new Error(
-        'Proxycurl strategy is a documented fallback and is not yet implemented; ' +
-          'use the LinkedIn guest API (default).',
-      );
     default: {
       const exhaustive: never = name;
       throw new Error(`Unknown scraper strategy: ${String(exhaustive)}`);

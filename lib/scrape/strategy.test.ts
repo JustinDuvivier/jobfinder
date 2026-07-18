@@ -18,7 +18,4 @@ describe('createStrategy', () => {
     expect(() => createStrategy('linkedin', { linkedin: { fetchFn } })).not.toThrow();
   });
 
-  it('throws a descriptive error for the not-yet-implemented Proxycurl fallback', () => {
-    expect(() => createStrategy('proxycurl')).toThrow(/Proxycurl/);
-  });
 });

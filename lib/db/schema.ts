@@ -20,17 +20,19 @@ PRAGMA foreign_keys = ON;
 -- are NOT columns here — they live in resume_assets (FR-33). Databases created
 -- before FR-33 carry vestigial resume_latex/source_of_truth/scoring_prompt/
 -- rewrite_rules columns; migrate() moves their content into resume_assets once
--- and blanks them.
+-- and blanks them. Databases that predate the Proxycurl-strategy removal carry
+-- a vestigial search_url column (unused, left in place — its DEFAULT '' keeps
+-- the upsert working without naming it); a stored 'proxycurl' strategy is
+-- coerced to 'linkedin' by migrate().
 CREATE TABLE IF NOT EXISTS user_config (
   id               INTEGER PRIMARY KEY CHECK (id = 1),
-  search_url       TEXT NOT NULL DEFAULT '',
-  scraper_strategy TEXT NOT NULL DEFAULT 'demo'
-                     CHECK (scraper_strategy IN ('demo','linkedin','proxycurl')),
+  scraper_strategy TEXT NOT NULL DEFAULT 'linkedin'
+                     CHECK (scraper_strategy IN ('demo','linkedin')),
   -- Orthogonal source toggle: Greenhouse runs alongside the primary strategy.
   greenhouse_enabled INTEGER NOT NULL DEFAULT 0 CHECK (greenhouse_enabled IN (0,1)),
   owner_name       TEXT NOT NULL DEFAULT '${DEFAULT_OWNER_NAME}',
   -- Saved-search inputs (FR-2/FR-25): JSON arrays. The LinkedIn guest strategy
-  -- runs the cross product of these; search_url is reserved for Proxycurl.
+  -- runs the cross product of these.
   keywords         TEXT NOT NULL DEFAULT '["AI Engineer","Machine Learning Engineer","ML Engineer","Software Engineer","Forward Deployed Engineer","Solutions Engineer"]',
   locations        TEXT NOT NULL DEFAULT '["New York","New Jersey"]',
   -- Title-exclusion terms (FR-4a): whole-word matches drop over-senior postings
@@ -151,11 +153,11 @@ CREATE INDEX IF NOT EXISTS idx_command_history_job ON command_history(job_id);
 -- One row per source per scrape run (the primary strategy, plus Greenhouse when
 -- enabled), tagged by its strategy name. Startup reconciliation inspects
 -- 'running' rows and getLastScrapeEndedAt takes MAX(ended_at), both fine across
--- multiple rows per run.
+-- multiple rows per run. Databases that predate the Proxycurl-strategy removal
+-- carry a vestigial nullable search_url column (unused, left in place).
 CREATE TABLE IF NOT EXISTS scrape_sessions (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   strategy   TEXT NOT NULL,
-  search_url TEXT,
   found      INTEGER NOT NULL DEFAULT 0,
   blocked    INTEGER NOT NULL DEFAULT 0,
   inserted   INTEGER NOT NULL DEFAULT 0,

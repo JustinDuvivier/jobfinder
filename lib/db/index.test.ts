@@ -81,6 +81,54 @@ describe('migrate (databases created before a column existed)', () => {
     // Running again is a no-op (columns already present).
     expect(() => migrate(db)).not.toThrow();
   });
+
+  it('coerces a stored proxycurl strategy to linkedin and leaves other choices alone', () => {
+    // A user_config as it existed before the Proxycurl removal: the vestigial
+    // search_url column and the old CHECK still naming 'proxycurl'.
+    const legacyConfig = `CREATE TABLE user_config (
+      id               INTEGER PRIMARY KEY CHECK (id = 1),
+      search_url       TEXT NOT NULL DEFAULT '',
+      scraper_strategy TEXT NOT NULL DEFAULT 'demo'
+                         CHECK (scraper_strategy IN ('demo','linkedin','proxycurl'))
+    );`;
+    const strategyOf = (db: DB): string =>
+      (db.prepare(`SELECT scraper_strategy AS s FROM user_config WHERE id = 1`).get() as {
+        s: string;
+      }).s;
+
+    const legacy = new Database(':memory:') as DB;
+    legacy.exec(legacyConfig);
+    legacy.prepare(`INSERT INTO user_config (id, scraper_strategy) VALUES (1, 'proxycurl')`).run();
+    applySchema(legacy); // IF NOT EXISTS keeps the legacy table
+    migrate(legacy);
+    expect(strategyOf(legacy)).toBe('linkedin');
+    expect(() => migrate(legacy)).not.toThrow(); // idempotent
+    expect(strategyOf(legacy)).toBe('linkedin');
+
+    // A stored non-proxycurl choice is untouched.
+    const demo = new Database(':memory:') as DB;
+    demo.exec(legacyConfig);
+    demo.prepare(`INSERT INTO user_config (id, scraper_strategy) VALUES (1, 'demo')`).run();
+    applySchema(demo);
+    migrate(demo);
+    expect(strategyOf(demo)).toBe('demo');
+  });
+});
+
+describe('fresh-schema scraper strategy default', () => {
+  it('defaults a fresh config row to the LinkedIn guest strategy and rejects proxycurl', () => {
+    const db = freshDb();
+    db.prepare(`INSERT INTO user_config (id) VALUES (1)`).run();
+    const row = db
+      .prepare(`SELECT scraper_strategy AS s FROM user_config WHERE id = 1`)
+      .get() as { s: string };
+    expect(row.s).toBe('linkedin');
+
+    // 'proxycurl' is no longer in the fresh CHECK set.
+    expect(() =>
+      db.prepare(`UPDATE user_config SET scraper_strategy = 'proxycurl' WHERE id = 1`).run(),
+    ).toThrow(/CHECK constraint/i);
+  });
 });
 
 describe('FR-33 migration — legacy asset columns and the onboarding flag', () => {

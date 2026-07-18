@@ -1,6 +1,6 @@
 # JobFinder — Product Requirements Document
 
-**Version:** 1.3
+**Version:** 1.4
 **Status:** Active
 **Owner:** the single self-hosting user
 **Companion doc:** Technical design in `jobfinder-docs.md` (the *how*; this PRD is the *what* and *why*)
@@ -139,7 +139,7 @@ Each requirement is intended to be individually testable.
 
 ## 10. Constraints & assumptions
 
-- LinkedIn guest endpoints remain accessible at cautious request rates; Proxycurl is a fallback. Rate limiting is IP-based and no account is at risk.
+- LinkedIn guest endpoints remain accessible at cautious request rates; the guest API is the default strategy (Demo exists for trying the app out), and the scraper Strategy interface is the extension point for a future paid fallback should the endpoints stop being viable. Rate limiting is IP-based and no account is at risk.
 - The user maintains a compile-clean LaTeX resume using a simple, standard template — or starts from the committed `resume-example/` starter (FR-32).
 - Native runs have a TeX Live distribution with `pdflatex` on `PATH`; the Docker image ships one (FR-29).
 - A single user on a single machine; no concurrent writers.

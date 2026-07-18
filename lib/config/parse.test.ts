@@ -52,10 +52,8 @@ describe('parseUserConfig', () => {
     expect(config({ scoreThreshold: raw }).scoreThreshold).toBe(expected);
   });
 
-  it('coerces string fields, defaulting the owner name when blank', () => {
-    const parsed = config({ searchUrl: 'https://x', ownerName: '  ' });
-    expect(parsed.searchUrl).toBe('https://x');
-    expect(parsed.ownerName).toBe('Alex_Candidate');
+  it('coerces the owner name, defaulting it when blank', () => {
+    expect(config({ ownerName: '  ' }).ownerName).toBe('Alex_Candidate');
     expect(config({ ownerName: ' Jane_Doe ' }).ownerName).toBe('Jane_Doe');
   });
 
