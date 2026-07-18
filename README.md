@@ -13,16 +13,31 @@ It runs on your own machine, for one person: one Next.js process, one SQLite fil
 > - **No login, localhost only.** The app has no authentication. It is only reachable at `http://127.0.0.1:3000` on the machine that runs it — keep it that way. See [Security model](#security-model-no-auth-localhost-only).
 > - **LinkedIn terms.** Scraping LinkedIn — even its public, logged-out pages — may violate LinkedIn's Terms of Service. This tool is for **personal use**, uses no LinkedIn account, and keeps request rates modest, but the risk (e.g. your IP being rate-limited or blocked) is **yours**. See [LinkedIn disclaimer](#linkedin-scraping-disclaimer).
 
+## System requirements
+
+- **Disk:** ~10 GB free. The stack downloads ~6 GB once (app image with TeX Live ~1.4 GB, Ollama sidecar image ~2 GB, small scoring model ~2.5 GB). The optional 27B model adds ~11 GB.
+- **RAM:** 8 GB minimum for the default local scoring (the small model uses ~5 GB while scoring; 16 GB is comfortable). Choosing the **Anthropic scoring backend** in Settings needs no local model — ~2–4 GB is then plenty.
+- **CPU/GPU:** any modern amd64 or arm64 CPU (Apple Silicon included); no GPU required for the small model. The 27B realistically wants a ~16 GB GPU.
+- **OS:** Windows 10/11, macOS, or Linux with [Docker](https://docs.docker.com/get-docker/) + Compose.
+
 ## Quick start (Docker Compose)
 
-Prerequisites: [Docker](https://docs.docker.com/get-docker/) with Compose, and an [Anthropic API key](https://console.anthropic.com/).
+Prerequisites: Docker with Compose (on Windows/macOS: start **Docker Desktop** first), and an [Anthropic API key](https://console.anthropic.com/).
+
+The same commands work in Windows PowerShell and the macOS/Linux terminal:
 
 ```sh
 git clone https://github.com/JustinDuvivier/jobfinder.git
 cd jobfinder
-cp .env.example .env       # then edit .env and set ANTHROPIC_API_KEY
+cp .env.example .env
 docker compose up
 ```
+
+Before `docker compose up`, open `.env` and set `ANTHROPIC_API_KEY`:
+
+- **Windows:** `notepad .env`
+- **macOS:** `open -e .env` (TextEdit) — or `nano .env` in the terminal
+- **Linux:** `nano .env`
 
 Then open **http://127.0.0.1:3000**.
 
@@ -44,6 +59,21 @@ Where your data lives:
 | `./resume/` on your machine (optional) | Your private resume assets, mounted read-only into the app. Gitignored — never committed, never baked into the image. |
 
 On first start the app walks you through a short guided setup: you paste **your** one-page LaTeX resume into an editor prefilled with the committed example (for a generic "Alex Candidate"), and it is accepted once it compiles to exactly one page. The three companion documents — scoring prompt, rewrite rules, source of truth — work as-is out of the box and are optional steps you can customize then or later, in the app. After that you can scrape, score, rewrite, and save a PDF immediately.
+
+## Updating
+
+From the folder you cloned (the one containing `docker-compose.yml`), in PowerShell or the terminal:
+
+```sh
+docker compose pull
+docker compose up -d
+```
+
+Your data is never touched by an update: the database (including your in-app resume and documents) lives on the `jobfinder-data` volume, downloaded models on `ollama-models`, and saved PDFs in `./output/` — all outside the container. When a new version changes the database layout, the app migrates your existing data automatically on startup.
+
+The **only** destructive command is `docker compose down -v` — the `-v` deletes the volumes. Plain `down`, `stop`, and restarts are always safe.
+
+Running natively instead? Update with `git pull && npm install && npm run build` — the SQLite file and `resume/` directory are untouched.
 
 ## Your resume (the one requirement)
 
