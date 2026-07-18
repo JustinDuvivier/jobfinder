@@ -753,8 +753,8 @@ Provided at run time — via `.env` on the host (`cp .env.example .env`), never 
 | `ANTHROPIC_API_KEY` | yes | Rewrite + explanation (Sonnet), and scoring only when the Anthropic backend is selected. Server-side only (NFR-7); compose fails fast with a clear message when unset. |
 | `RAPID_API_KEY` | no | The Greenhouse aggregator key (FR-5a). Blank disables that source. |
 | `OLLAMA_MODEL` | no | The model tag the one-shot pull init fetches (default `qwen3:4b-instruct-2507-q4_K_M`; the higher-accuracy override is `batiai/qwen3.6-27b:iq3` — see `docs/scoring-model-eval.md`). |
-
-Set by the compose file itself: `OLLAMA_BASE_URL=http://ollama:11434` — the FR-31 endpoint resolver (`lib/env/ollama.ts`, single resolution point, default `http://127.0.0.1:11434`) pointed at the sidecar by service name on the compose network.
+| `COMPOSE_PROFILES` | no* | Which compose profiles are active. `.env.example` sets `local-scoring` — the profile holding the `ollama` + `ollama-pull` services — so the default stack is all three services. Empty disables the sidecar (host-Ollama topology, below). *Read by compose itself, not by the app; a pre-profile `.env` without the line starts the app alone. |
+| `OLLAMA_BASE_URL` | no | Where the app finds Ollama. Unset, the compose file defaults it to the sidecar (`http://ollama:11434`) by service name on the compose network — the FR-31 endpoint resolver (`lib/env/ollama.ts`, single resolution point, native default `http://127.0.0.1:11434`) pointed at the sidecar. Set (typically `http://host.docker.internal:11434`, with `COMPOSE_PROFILES=` empty), scoring targets an Ollama outside the stack instead. |
 
 ### Sidecar topology and volumes
 
@@ -763,6 +763,13 @@ Set by the compose file itself: `OLLAMA_BASE_URL=http://ollama:11434` — the FR
 - **`app`** — the image above, built from the repo (`build: .`). Publishes exactly one port, **`127.0.0.1:3000:3000`**: the app has no auth, so the "not reachable beyond the host" invariant (NFR-10) lives in this mapping — the port is invisible to the LAN, and remote access is the user's own VPN/SSH tunnel.
 - **`ollama`** — the local-scoring sidecar (`ollama/ollama`). Publishes **no ports at all**; only the app and the pull init reach it over the compose-internal network.
 - **`ollama-pull`** — a one-shot init service: waits for the sidecar, then pulls `OLLAMA_MODEL` into the model volume unless it is already present (`ollama show` succeeding), so the multi-GB download happens exactly once.
+
+Both Ollama services carry the **`local-scoring` compose profile**, activated by `COMPOSE_PROFILES=local-scoring` in `.env` (the `.env.example` default — the quick-start stack is unchanged). The `app` service deliberately has **no `depends_on`**: compose refuses to start a service whose `depends_on` names a profile-disabled one, and ordering is unnecessary — the pull init has its own wait loop, and the app probes Ollama reachability per request (`/api/ollama/models` reports `reachable: false`; scoring fails loudly per job) so a sidecar that arrives late, or never, degrades exactly as a down native daemon does.
+
+Two supported variations on the default topology (user-facing recipes in README "GPU acceleration & host Ollama"):
+
+- **Host-Ollama mode** — `COMPOSE_PROFILES=` (empty) plus `OLLAMA_BASE_URL=http://host.docker.internal:11434` in `.env`: only `app` starts, and scoring, the Settings model status, and the in-app download all target a natively installed Ollama on the Docker host. This is the GPU path for machines Docker can't hand a GPU to (all Macs — Metal via the native app — and AMD on Windows), and it avoids a second multi-GB model store when a host Ollama already exists.
+- **NVIDIA GPU override** — the committed `docker-compose.gpu.yml` (`docker compose -f docker-compose.yml -f docker-compose.gpu.yml up`) grants the sidecar every host GPU via `deploy.resources.reservations.devices` (`driver: nvidia`, `count: all`, `capabilities: [gpu]`). Same stack, same profile; scoring just runs on the GPU. (AMD-on-Linux users substitute the `ollama/ollama:rocm` image + `/dev/kfd`/`/dev/dri` devices in an uncommitted override — documented inline in the README, not shipped, since ROCm device mapping varies by card.)
 
 | Mount | Type | Purpose |
 |-------|------|---------|

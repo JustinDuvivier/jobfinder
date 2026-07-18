@@ -11,6 +11,14 @@
 #   ollama-pull — one-shot init: pulls the scoring model into the model
 #                 volume on first start; no-ops when it is already there
 #
+# The two Ollama services sit behind the `local-scoring` compose profile,
+# activated by COMPOSE_PROFILES=local-scoring in .env (the .env.example
+# default — so `docker compose up` starts all three services exactly as
+# before). Set COMPOSE_PROFILES= (empty) plus OLLAMA_BASE_URL to score
+# against an Ollama outside the stack — e.g. a natively installed one on
+# the Docker host (see README "GPU acceleration & host Ollama").
+# NVIDIA GPU for the sidecar: docker-compose.gpu.yml.
+#
 # The app has no auth, so the localhost-only invariant lives in the port
 # mapping: the port is published on 127.0.0.1 only, making the app
 # unreachable from other machines on the LAN. (Inside the container the
@@ -27,8 +35,10 @@ services:
       ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in .env (start from `cp .env.example .env`)}"
       # Optional: enables the Greenhouse aggregator source when present.
       RAPID_API_KEY: ${RAPID_API_KEY:-}
-      # The Ollama sidecar, reached by service name on the compose network.
-      OLLAMA_BASE_URL: http://ollama:11434
+      # Where the app finds Ollama. Default: the sidecar, by service name on
+      # the compose network. Override in .env (with COMPOSE_PROFILES= to keep
+      # the sidecar down) to score against a host or remote Ollama instead.
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
     volumes:
       # SQLite file (jobs, statuses, config). A named volume, so
       # `docker compose down` + `up` preserves everything; only
@@ -40,13 +50,17 @@ services:
       # source_of_truth.md, scoring_prompt.md, rewrite_rules.md into ./resume/
       # — each file missing there falls back to the committed resume-example/.
       - ./resume:/app/resume:ro
-    depends_on:
-      ollama:
-        condition: service_started
+    # No depends_on here on purpose: the sidecar lives behind the
+    # `local-scoring` profile, and compose refuses to start a service whose
+    # depends_on names a profile-disabled one. Ordering is not needed anyway —
+    # the app probes Ollama reachability per request and fails soft while the
+    # sidecar is still coming up, and the pull init has its own wait loop.
     restart: unless-stopped
 
   ollama:
     image: ollama/ollama
+    # Behind the default-on `local-scoring` profile (see header comment).
+    profiles: ["local-scoring"]
     # No published ports on purpose: only the app and the pull init reach it,
     # over the compose-internal network. If you must reach it from the host
     # for debugging, publish "127.0.0.1:11434:11434" — never a LAN-visible
@@ -59,6 +73,7 @@ services:
 
   ollama-pull:
     image: ollama/ollama
+    profiles: ["local-scoring"]
     depends_on:
       ollama:
         condition: service_started

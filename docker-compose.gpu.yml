@@ -1,0 +1,18 @@
+# NVIDIA GPU override for the local-scoring sidecar (Windows via Docker
+# Desktop/WSL2, or Linux with nvidia-container-toolkit installed). Grants the
+# ollama service every host GPU so scoring runs on it instead of the CPU:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+#
+# AMD GPUs and Macs cannot use this file — see README
+# "GPU acceleration & host Ollama" for those paths.
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

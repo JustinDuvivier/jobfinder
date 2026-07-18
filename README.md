@@ -56,6 +56,8 @@ What the stack is:
 - **ollama** — the local-scoring sidecar (free, CPU-friendly scoring is the default). Not published on any port.
 - **ollama-pull** — a one-shot init that pre-pulls the scoring model, then exits.
 
+Both Ollama services sit behind the default-on `local-scoring` compose profile, so they can be switched off in one line when scoring runs elsewhere — see [GPU acceleration & host Ollama](#gpu-acceleration--host-ollama).
+
 Where your data lives:
 
 | Location | Contents |
@@ -75,6 +77,8 @@ From the folder you cloned (the one containing `docker-compose.yml`), in PowerSh
 docker compose pull
 docker compose up -d
 ```
+
+One-time note for `.env` files created before the `local-scoring` profile existed: add the line `COMPOSE_PROFILES=local-scoring` (see `.env.example`) to keep the Ollama sidecar starting with the stack — without it only the app comes up.
 
 Your data is never touched by an update: the database (including your in-app resume and documents) lives on the `jobfinder-data` volume, downloaded models on `ollama-models`, and saved PDFs in `./output/` — all outside the container. When a new version changes the database layout, the app migrates your existing data automatically on startup.
 
@@ -113,6 +117,48 @@ Scoring (the high-frequency AI call) is one curated dropdown on the app's Setup 
 Ollama down, out of disk, or a bad tag? The download reports a clear error in Settings and nothing else breaks; scoring with a model that is not installed fails loudly with instructions, exactly as before.
 
 Either way, the resume **rewrite** and change **explanation** always run on Claude (Sonnet), which is why the Anthropic key is required.
+
+## GPU acceleration & host Ollama
+
+Only **scoring** talks to Ollama — scraping, the Claude rewrite/explanation, and PDF compilation are unaffected by everything here. And picking the **Claude (Anthropic Haiku)** scoring backend in Settings sidesteps local models entirely, so none of this applies.
+
+The default sidecar scores on CPU, which the small model handles fine. To put a GPU behind it:
+
+| Your machine | Fastest path |
+|---|---|
+| NVIDIA GPU — Windows or Linux | Committed GPU override (below) |
+| AMD GPU — Linux | ROCm sidecar image (below) |
+| AMD GPU — Windows | Host Ollama (below) — Docker has no AMD passthrough on Windows |
+| Any Mac | Host Ollama (below) — Docker on macOS has no GPU passthrough; the native app is Metal-accelerated on Apple Silicon |
+
+**NVIDIA (Windows or Linux).** Needs Docker Desktop with WSL2 GPU support (Windows) or the NVIDIA Container Toolkit (Linux). Run the stack with the committed override and the sidecar sees every host GPU:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
+```
+
+**AMD on Linux.** Ollama ships a ROCm image; write this small override yourself (it is not committed — device paths and ROCm support vary by card):
+
+```yaml
+# docker-compose.rocm.yml
+services:
+  ollama:
+    image: ollama/ollama:rocm
+    devices:
+      - /dev/kfd
+      - /dev/dri
+```
+
+and run `docker compose -f docker-compose.yml -f docker-compose.rocm.yml up`.
+
+**Host Ollama (all Macs, AMD on Windows — or whenever you already run Ollama natively).** Skip the sidecar and point the app at an Ollama installed from [ollama.com](https://ollama.com) on your machine. Stop the stack first (`docker compose down` — doing this before the next step also removes the sidecar containers), then in `.env` set:
+
+```
+COMPOSE_PROFILES=
+OLLAMA_BASE_URL=http://host.docker.internal:11434
+```
+
+and start it again (`docker compose up -d`). Only the app starts — no sidecar, no redundant ~2.5 GB in-container model pull — and the Settings model status and **Download** button now target your host's Ollama, so you can pull the scoring model there in-app (or with `ollama pull qwen3:4b-instruct-2507-q4_K_M` once).
 
 ## Security model (no auth, localhost only)
 
