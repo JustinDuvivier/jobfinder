@@ -80,8 +80,8 @@ describe('parseUserConfig', () => {
   });
 
   it('defaults a missing or blank Ollama model tag and keeps a custom one', () => {
-    expect(config({}).ollamaModel).toBe('batiai/qwen3.6-27b:iq3');
-    expect(config({ ollamaModel: '   ' }).ollamaModel).toBe('batiai/qwen3.6-27b:iq3');
+    expect(config({}).ollamaModel).toBe('qwen3:4b-instruct-2507-q4_K_M');
+    expect(config({ ollamaModel: '   ' }).ollamaModel).toBe('qwen3:4b-instruct-2507-q4_K_M');
     expect(config({ ollamaModel: ' qwen3.5:9b ' }).ollamaModel).toBe('qwen3.5:9b');
   });
 

@@ -63,7 +63,7 @@ describe('migrate (databases created before a column existed)', () => {
       .prepare(`SELECT scoring_backend AS b, ollama_model AS m FROM user_config`)
       .get() as { b: string; m: string };
     expect(cfg.b).toBe('ollama');
-    expect(cfg.m).toBe('batiai/qwen3.6-27b:iq3');
+    expect(cfg.m).toBe('qwen3:4b-instruct-2507-q4_K_M');
 
     // The added flag defaults to 0 for existing rows.
     db.prepare(`INSERT INTO jobs (job_id, status) VALUES ('j', 'scored')`).run();

@@ -68,7 +68,7 @@ export function migrate(db: DB): void {
   // CHECK constraints can't be added via ALTER (see below_threshold below);
   // parseUserConfig validates the backend value for already-created databases.
   addConfig('scoring_backend', `scoring_backend TEXT NOT NULL DEFAULT 'ollama'`);
-  addConfig('ollama_model', `ollama_model TEXT NOT NULL DEFAULT 'batiai/qwen3.6-27b:iq3'`);
+  addConfig('ollama_model', `ollama_model TEXT NOT NULL DEFAULT 'qwen3:4b-instruct-2507-q4_K_M'`);
   // CHECK omitted for ALTER (as above); the column default + app-level 0/1 writes
   // keep it well-formed on already-created databases.
   addConfig('greenhouse_enabled', `greenhouse_enabled INTEGER NOT NULL DEFAULT 0`);

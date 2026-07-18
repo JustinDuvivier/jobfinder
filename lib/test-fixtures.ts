@@ -28,7 +28,7 @@ export const CONFIG: UserConfig = {
   // Transport tests mock the Anthropic client/scoreJob; backend-routing tests
   // flip this to 'ollama' explicitly.
   scoringBackend: 'anthropic',
-  ollamaModel: 'batiai/qwen3.6-27b:iq3',
+  ollamaModel: 'qwen3:4b-instruct-2507-q4_K_M',
   scoreThreshold: 60,
 };
 

@@ -122,7 +122,7 @@ describe('scoring-backend routing (FR-6)', () => {
 
     await runWarmFirstScoring(fresh, scoreAll);
 
-    expect(ensureOllamaModelMock).toHaveBeenCalledWith('batiai/qwen3.6-27b:iq3');
+    expect(ensureOllamaModelMock).toHaveBeenCalledWith('qwen3:4b-instruct-2507-q4_K_M');
     expect(scoreJobOllamaMock).toHaveBeenCalledTimes(1);
   });
 

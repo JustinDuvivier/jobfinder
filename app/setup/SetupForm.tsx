@@ -65,7 +65,7 @@ export function SetupForm({
   const [scoringBackend, setScoringBackend] = useState<ScoringBackendName>(
     config?.scoringBackend ?? 'ollama',
   );
-  const [ollamaModel, setOllamaModel] = useState(config?.ollamaModel ?? 'batiai/qwen3.6-27b:iq3');
+  const [ollamaModel, setOllamaModel] = useState(config?.ollamaModel ?? 'qwen3:4b-instruct-2507-q4_K_M');
   const [searchUrl, setSearchUrl] = useState(config?.searchUrl ?? '');
   const [keywords, setKeywords] = useState(toLines(config?.keywords ?? DEFAULT_KEYWORDS));
   const [locations, setLocations] = useState(toLines(config?.locations ?? DEFAULT_LOCATIONS));
@@ -264,7 +264,7 @@ export function SetupForm({
             <input
               value={ollamaModel}
               onChange={(e) => setOllamaModel(e.target.value)}
-              placeholder="batiai/qwen3.6-27b:iq3"
+              placeholder="qwen3:4b-instruct-2507-q4_K_M"
             />
           </div>
         </div>

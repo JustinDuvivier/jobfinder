@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS user_config (
   -- restores Haiku scoring. ollama_model is the tag the local backend runs.
   scoring_backend  TEXT NOT NULL DEFAULT 'ollama'
                      CHECK (scoring_backend IN ('ollama','anthropic')),
-  ollama_model     TEXT NOT NULL DEFAULT 'batiai/qwen3.6-27b:iq3',
+  ollama_model     TEXT NOT NULL DEFAULT 'qwen3:4b-instruct-2507-q4_K_M',
   created_at       TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
 );

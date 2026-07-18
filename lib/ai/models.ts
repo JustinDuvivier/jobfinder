@@ -18,20 +18,25 @@
  *  quote-and-cap post-processing in score.ts rather than the model's arithmetic. */
 export const SCORING_MODEL = 'claude-haiku-4-5-20251001';
 /**
- * Default local scoring model (FR-6): the IQ3 quant fits an 11GB footprint on
- * a 16GB GPU. Eval evidence: 151/158 golden checks at ~8s/job, and its one
- * recall miss (an invented "Senior ≈ 6 years" requirement) is neutralized by
- * the FR-6a park rule — see golden/score.golden.json + scripts/eval-score-golden.mts.
- * User-overridable in Settings (user_config.ollama_model).
+ * Default local scoring model (FR-6): a ~2.5GB q4 4B pull a CPU-only machine
+ * can run (~4-5GB RAM with the 16k context). Eval evidence (2026-07-17,
+ * docs/scoring-model-eval.md): best small model of five candidates at 134/158
+ * golden checks, 0 recall misses, 0 overscores, and the app-persisted score
+ * in range on all 12 cases — its residual raw-reply misses (flipped gap sign,
+ * inferred-requirement quotes) are exactly what the code-side quote re-derive,
+ * gap cap, and FR-6a park correct. Users with a 16GB GPU can restore the
+ * previous tuned default, `batiai/qwen3.6-27b:iq3` (11GB, 151/158 checks), in
+ * Settings (user_config.ollama_model).
  */
-export const DEFAULT_OLLAMA_MODEL = 'batiai/qwen3.6-27b:iq3';
+export const DEFAULT_OLLAMA_MODEL = 'qwen3:4b-instruct-2507-q4_K_M';
 /**
  * Ollama context window for scoring. Sized from measured data, not the eval's
  * 8192: the stable prefix is ~5.5k tokens and the longest captured real
  * posting (~17.8k chars) pushes the full prompt to ~9.3-10.7k tokens, so 8192
  * would silently truncate the input on long postings. 16384 leaves the full
  * SCORING_MAX_TOKENS reply headroom at the observed maximum (~3.7k tokens
- * spare); the KV-cache cost fits next to the 11GB default model on 16GB VRAM.
+ * spare); the KV-cache cost (~1-2GB on the 4B default) keeps the total
+ * footprint CPU-friendly, and fits next to the 11GB 27B override on 16GB VRAM.
  */
 export const OLLAMA_NUM_CTX = 16384;
 /** Quality tier for the creative rewrite. */
