@@ -8,7 +8,7 @@
  * identifier-in / path-out boundary is enforced here just as it is for /api/save.
  */
 import { spawn } from 'node:child_process';
-import { dirname, resolve, sep } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 
 /**
  * True iff `target` resolves to `base` or a path strictly inside it. Comparison
@@ -51,6 +51,22 @@ export function containedDir(filePath: string, baseDir: string): string {
     throw new Error('Refusing to open a path outside the output directory');
   }
   return dirname(resolve(filePath));
+}
+
+/**
+ * Present a contained directory the way the user sees it on their host: as a
+ * `./`-prefixed, forward-slashed path relative to the *parent* of the base
+ * directory. In the container the base is `/output`, bind-mounted from
+ * `./output` next to `docker-compose.yml`, so `/output/20260618/X` is
+ * presented as `./output/20260618/X` — the path relative to the user's compose
+ * folder rather than a raw container path that exists nowhere on the host.
+ * Pure presentation; callers pass a `dir` already verified by containedDir.
+ */
+export function composeRelativeDir(dir: string, baseDir: string): string {
+  const base = resolve(baseDir);
+  const rel = relative(base, resolve(dir)).split(sep).join('/');
+  const prefix = `./${basename(base)}`;
+  return rel === '' ? prefix : `${prefix}/${rel}`;
 }
 
 /**

@@ -7,12 +7,13 @@
  *
  * Response: `{ opened: boolean, dir: string }`. In container mode
  * (JOBFINDER_CONTAINER=1) no file manager exists, so the route returns
- * `opened: false` with the still-verified `dir` and the client offers
- * copy-path instead of opening.
+ * `opened: false` with the still-verified `dir` — plus `relativeDir`, the same
+ * directory as the `./output/...` form the user has next to their
+ * docker-compose.yml — and the client offers copy-path instead of opening.
  */
 import { getDb } from '@/lib/db';
 import { isContainerMode } from '@/lib/env/container';
-import { containedDir, openContainingFolder } from '@/lib/fs/open-folder';
+import { composeRelativeDir, containedDir, openContainingFolder } from '@/lib/fs/open-folder';
 import { requireJobId, lookupJob, requireOutputDir } from '@/lib/http/guards';
 
 export const runtime = 'nodejs';
@@ -38,7 +39,11 @@ export async function POST(req: Request): Promise<Response> {
     // instead. The single flag check for this module lives here.
     if (isContainerMode()) {
       const dir = containedDir(job.approvedPdfPath, outputDir.baseDir);
-      return Response.json({ opened: false, dir });
+      return Response.json({
+        opened: false,
+        dir,
+        relativeDir: composeRelativeDir(dir, outputDir.baseDir),
+      });
     }
     const dir = openContainingFolder(job.approvedPdfPath, outputDir.baseDir);
     return Response.json({ opened: true, dir });

@@ -55,7 +55,7 @@ Where your data lives:
 |----------|----------|
 | `jobfinder-data` named volume | The SQLite database (jobs, scores, statuses, config). Survives `docker compose down`; only `down -v` deletes it. |
 | `ollama-models` named volume | The downloaded scoring model, so it is pulled once. |
-| `./output/` on your machine | Approved resume PDFs, as `YYYYMMDD/Company_Title_xxxxxx/Owner_Resume.pdf`. |
+| `./output/` on your machine | Approved resume PDFs, as `YYYYMMDD/Company_Title_xxxxxx/Owner_Resume.pdf`. You can also view any approved PDF right in the browser — **View PDF** on the Tracker — without touching this folder. |
 | `./resume/` on your machine (optional) | Your private resume assets, mounted read-only into the app. Gitignored — never committed, never baked into the image. |
 
 On first start the app walks you through a short guided setup: you paste **your** one-page LaTeX resume into an editor prefilled with the committed example (for a generic "Alex Candidate"), and it is accepted once it compiles to exactly one page. The three companion documents — scoring prompt, rewrite rules, source of truth — work as-is out of the box and are optional steps you can customize then or later, in the app. After that you can scrape, score, rewrite, and save a PDF immediately.
@@ -154,7 +154,7 @@ The app is one Node process and runs fine outside a container:
    Optional: `RAPID_API_KEY` (Greenhouse source), `OLLAMA_BASE_URL` (when Ollama is not at `http://127.0.0.1:11434`), `JOBFINDER_PDFLATEX_PATH` (when `pdflatex` is not on `PATH`).
 3. `npm install && npm run build && npm start` — the server binds `127.0.0.1:3000`. (`npm run dev` for development.)
 
-Native runs additionally get the two host-OS niceties that are no-ops in the container: "open folder" opens the saved PDF's directory in your file manager, and scheduled runs can fire a desktop toast for strong matches.
+Native runs additionally get the two host-OS niceties that degrade in the container: "open folder" opens the saved PDF's directory in your file manager (in the container it copies the `./output/...` path relative to your docker-compose folder instead), and scheduled runs can fire a desktop toast for strong matches. Viewing an approved PDF in the browser (**View PDF** on the Tracker) works the same in both modes.
 
 ## Documentation
 

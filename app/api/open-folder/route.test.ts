@@ -8,16 +8,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { Job } from '@/lib/types';
 import * as repo from '@/lib/db/repo';
-import { containedDir, openContainingFolder } from '@/lib/fs/open-folder';
+import { composeRelativeDir, containedDir, openContainingFolder } from '@/lib/fs/open-folder';
 import { POST } from './route';
 
 vi.mock('@/lib/db', () => ({ getDb: vi.fn(() => ({})) }));
 vi.mock('@/lib/db/repo', () => ({ getJobById: vi.fn() }));
-vi.mock('@/lib/fs/open-folder', () => ({ openContainingFolder: vi.fn(), containedDir: vi.fn() }));
+vi.mock('@/lib/fs/open-folder', () => ({
+  openContainingFolder: vi.fn(),
+  containedDir: vi.fn(),
+  composeRelativeDir: vi.fn(),
+}));
 
 const getJobById = vi.mocked(repo.getJobById);
 const mockedOpen = vi.mocked(openContainingFolder);
 const mockedContainedDir = vi.mocked(containedDir);
+const mockedComposeRelative = vi.mocked(composeRelativeDir);
 
 function post(body: unknown): Promise<Response> {
   return POST(
@@ -86,13 +91,15 @@ describe('POST /api/open-folder in container mode (JOBFINDER_CONTAINER=1)', () =
     vi.stubEnv('JOBFINDER_CONTAINER', '1');
   });
 
-  it('never spawns a folder open; returns { opened: false } with the verified dir for copy-path', async () => {
+  it('never spawns a folder open; returns { opened: false } with the verified dir and its compose-relative form for copy-path', async () => {
     mockedContainedDir.mockReturnValue('C:\\out\\a');
+    mockedComposeRelative.mockReturnValue('./out/a');
     const res = await post({ jobId: 7 });
     expect(mockedOpen).not.toHaveBeenCalled();
     expect(mockedContainedDir).toHaveBeenCalledWith('C:\\out\\a\\resume.pdf', 'C:\\out');
+    expect(mockedComposeRelative).toHaveBeenCalledWith('C:\\out\\a', 'C:\\out');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ opened: false, dir: 'C:\\out\\a' });
+    expect(await res.json()).toEqual({ opened: false, dir: 'C:\\out\\a', relativeDir: './out/a' });
   });
 
   it('still maps a containment failure to a 400 with the message', async () => {

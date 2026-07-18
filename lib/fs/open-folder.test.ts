@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { containedDir, isWithinBase } from './open-folder';
+import { composeRelativeDir, containedDir, isWithinBase } from './open-folder';
 
 const BASE = resolve(tmpdir(), 'jobfinder-base');
 
@@ -37,5 +37,25 @@ describe('containedDir', () => {
     expect(() => containedDir(join(BASE, '..', 'secret', 'r.pdf'), BASE)).toThrow(
       'Refusing to open a path outside the output directory',
     );
+  });
+});
+
+describe('composeRelativeDir', () => {
+  it('presents a contained dir as ./<base-name>/<relative>, forward-slashed', () => {
+    expect(composeRelativeDir(join(BASE, '20260618', 'Stripe_AI_Engineer'), BASE)).toBe(
+      './jobfinder-base/20260618/Stripe_AI_Engineer',
+    );
+  });
+
+  it('maps the container layout /output/... to the compose-folder form ./output/...', () => {
+    // The docker-compose bind is `./output:/output`, so this is exactly the
+    // path the user has on their host next to docker-compose.yml.
+    expect(composeRelativeDir(join(BASE, 'output', '20260618', 'Acme_Dev_a1b2c3'), join(BASE, 'output'))).toBe(
+      './output/20260618/Acme_Dev_a1b2c3',
+    );
+  });
+
+  it('presents the base directory itself as ./<base-name>', () => {
+    expect(composeRelativeDir(BASE, BASE)).toBe('./jobfinder-base');
   });
 });

@@ -7,6 +7,8 @@ import { addWeeks, jobWeekKey, weekKeyOf, weekLabel } from '@/lib/week';
 import { postJson } from '@/app/sse-client';
 import { ScoreReason } from '@/app/components/score-reason';
 import { EditableSalary } from '@/app/components/editable-salary';
+import { copyPath, copyPathNotice, pdfHref } from './affordances';
+import type { OpenFolderResult } from './affordances';
 
 type TrackerJob = Pick<
   Job,
@@ -196,18 +198,17 @@ export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
 
   async function openFolder(id: number) {
     try {
-      const res = await postJson<{ opened: boolean; dir: string }>('/api/open-folder', {
-        jobId: id,
-      });
+      const res = await postJson<OpenFolderResult>('/api/open-folder', { jobId: id });
       if (!res.opened) {
         // Container mode: the server has no file manager to open, so it
-        // returns the saved folder path instead — copy it for the user (or
+        // returns the saved folder path instead — presented in its
+        // `./output/...` compose-relative form — copy it for the user (or
         // just show it when the clipboard is unavailable).
         try {
-          await navigator.clipboard.writeText(res.dir);
-          setNotice(`Folder path copied to clipboard: ${res.dir}`);
+          await navigator.clipboard.writeText(copyPath(res));
+          setNotice(copyPathNotice(res, true));
         } catch {
-          setNotice(`Saved folder: ${res.dir}`);
+          setNotice(copyPathNotice(res, false));
         }
       }
     } catch (err) {
@@ -303,6 +304,20 @@ export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
                     title="Open the job posting"
                   >
                     ↗ Posting
+                  </a>
+                )}
+                {job.approvedPdfPath && (
+                  <a
+                    className="btn btn-sm btn-ghost"
+                    href={pdfHref(job.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    draggable={false}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                    title="View the approved PDF"
+                  >
+                    View PDF
                   </a>
                 )}
                 {job.approvedPdfPath && (
@@ -421,9 +436,20 @@ export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
                   <td className="muted">{job.updatedAt ? job.updatedAt.slice(0, 10) : '—'}</td>
                   <td onClick={(e) => e.stopPropagation()}>
                     {job.approvedPdfPath && (
-                      <button className="btn-sm btn-ghost" onClick={() => openFolder(job.id)} title="Open saved folder">
-                        📁
-                      </button>
+                      <>
+                        <a
+                          className="btn btn-sm btn-ghost"
+                          href={pdfHref(job.id)}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View the approved PDF"
+                        >
+                          View PDF
+                        </a>
+                        <button className="btn-sm btn-ghost" onClick={() => openFolder(job.id)} title="Open saved folder">
+                          📁
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
