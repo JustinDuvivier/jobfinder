@@ -84,6 +84,8 @@ function sortValue(j: TrackerJob, key: SortKey): number | string {
 export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
   const [jobs, setJobs] = useState<TrackerJob[]>(initial);
   const [error, setError] = useState<string | null>(null);
+  // Container-mode copy-path confirmation from the open-folder action.
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<JobStatus | 'all'>('all');
@@ -194,7 +196,20 @@ export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
 
   async function openFolder(id: number) {
     try {
-      await postJson('/api/open-folder', { jobId: id });
+      const res = await postJson<{ opened: boolean; dir: string }>('/api/open-folder', {
+        jobId: id,
+      });
+      if (!res.opened) {
+        // Container mode: the server has no file manager to open, so it
+        // returns the saved folder path instead — copy it for the user (or
+        // just show it when the clipboard is unavailable).
+        try {
+          await navigator.clipboard.writeText(res.dir);
+          setNotice(`Folder path copied to clipboard: ${res.dir}`);
+        } catch {
+          setNotice(`Saved folder: ${res.dir}`);
+        }
+      }
     } catch (err) {
       setError((err as Error).message);
     }
@@ -538,6 +553,7 @@ export function TrackerClient({ jobs: initial }: { jobs: TrackerJob[] }) {
       </div>
 
       {error && <div className="banner banner-err">{error}</div>}
+      {notice && <div className="banner banner-ok">{notice}</div>}
 
       {jobs.length === 0 ? (
         <div className="card empty-cell">No tracked applications yet. Approve a rewrite to add one.</div>

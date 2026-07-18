@@ -10,6 +10,7 @@
  */
 import { spawn as nodeSpawn } from 'node:child_process';
 import path from 'node:path';
+import { isContainerMode } from '@/lib/env/container';
 
 /** The slice of ChildProcess the notifier needs — lets tests inject a fake. */
 export interface NotifierChild {
@@ -28,6 +29,12 @@ export type SpawnLike = (
  * the Windows `py -3` launcher if it's absent. The fallback's own failure is
  * swallowed — a missed toast must never take the server down. */
 export function fireNotifier(title: string, message: string, spawnFn: SpawnLike = nodeSpawn): void {
+  // Container mode (JOBFINDER_CONTAINER=1): there is no desktop to toast on,
+  // so degrade to a silent no-op — no spawn, no error. This is the single flag
+  // check for the notifier module; every caller (the /api/notify route and the
+  // scheduler's runner) degrades through it.
+  if (isContainerMode()) return;
+
   const script = path.join(process.cwd(), 'scripts', 'notify.py');
   const args = [script, '--title', title, '--message', message];
 

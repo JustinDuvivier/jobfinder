@@ -5,7 +5,7 @@
  * fallback's own failure swallowed. The spawn function is injected so no real
  * process is started and no toast fires.
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import path from 'node:path';
 import { fireNotifier, type SpawnLike } from './notifier';
 
@@ -85,5 +85,25 @@ describe('fireNotifier', () => {
     children[0].emitError();
     expect(() => children[1].emitError()).not.toThrow();
     expect(spawn).toHaveBeenCalledTimes(2); // no third attempt
+  });
+});
+
+describe('fireNotifier in container mode (JOBFINDER_CONTAINER=1)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('is a silent no-op: never spawns any interpreter and never throws', () => {
+    vi.stubEnv('JOBFINDER_CONTAINER', '1');
+    const { spawn } = makeFakeSpawn();
+    expect(() => fireNotifier('JobFinder', 'a new match', spawn)).not.toThrow();
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('keeps spawning natively when the flag holds any non-"1" value', () => {
+    vi.stubEnv('JOBFINDER_CONTAINER', '0');
+    const { spawn } = makeFakeSpawn();
+    fireNotifier('t', 'm', spawn);
+    expect(spawn).toHaveBeenCalledTimes(1);
   });
 });

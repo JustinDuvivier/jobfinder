@@ -40,14 +40,25 @@ export function openFolder(dir: string): void {
 }
 
 /**
+ * Verify a saved file path is inside the base directory and return its
+ * containing folder, with no OS interaction. Throws if the path escapes base.
+ * This is the containment step of openContainingFolder, and stands alone in
+ * container mode, where the folder cannot be opened and the path is returned
+ * to the client as a copy-path affordance instead.
+ */
+export function containedDir(filePath: string, baseDir: string): string {
+  if (!isWithinBase(filePath, baseDir)) {
+    throw new Error('Refusing to open a path outside the output directory');
+  }
+  return dirname(resolve(filePath));
+}
+
+/**
  * Verify a saved file path is inside the base directory, then open its
  * containing folder. Returns the folder path. Throws if the path escapes base.
  */
 export function openContainingFolder(filePath: string, baseDir: string): string {
-  if (!isWithinBase(filePath, baseDir)) {
-    throw new Error('Refusing to open a path outside the output directory');
-  }
-  const dir = dirname(resolve(filePath));
+  const dir = containedDir(filePath, baseDir);
   openFolder(dir);
   return dir;
 }
