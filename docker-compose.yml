@@ -1,0 +1,88 @@
+# JobFinder — one-command local stack.
+#
+#   cp .env.example .env    # then add your ANTHROPIC_API_KEY
+#   docker compose up
+#   open http://localhost:3000
+#
+# Topology:
+#   app         — the Next.js app + TeX Live (built from ./Dockerfile)
+#   ollama      — local-scoring sidecar (free CPU scoring is the default)
+#   ollama-pull — one-shot init: pulls the scoring model into the model
+#                 volume on first start; no-ops when it is already there
+#
+# The app has no auth, so the localhost-only invariant lives in the port
+# mapping: the port is published on 127.0.0.1 only, making the app
+# unreachable from other machines on the LAN. (Inside the container the
+# server binds 0.0.0.0 so Docker's port proxy can reach it.)
+
+services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      # Required: rewrite + explanation (and the optional Anthropic scoring
+      # backend). Set it in .env; it stays server-side.
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:?Set ANTHROPIC_API_KEY in .env (start from `cp .env.example .env`)}"
+      # Optional: enables the Greenhouse aggregator source when present.
+      RAPID_API_KEY: ${RAPID_API_KEY:-}
+      # The Ollama sidecar, reached by service name on the compose network.
+      OLLAMA_BASE_URL: http://ollama:11434
+    volumes:
+      # SQLite file (jobs, statuses, config). A named volume, so
+      # `docker compose down` + `up` preserves everything; only
+      # `docker compose down -v` deletes it.
+      - jobfinder-data:/data
+      # Approved resume packages (PDF + .tex + posting) land here on the host.
+      - ./output:/output
+      # Your private resume assets (optional): drop base_resume.tex,
+      # source_of_truth.md, scoring_prompt.md, rewrite_rules.md into ./resume/
+      # — each file missing there falls back to the committed resume-example/.
+      - ./resume:/app/resume:ro
+    depends_on:
+      ollama:
+        condition: service_started
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama
+    # No published ports on purpose: only the app and the pull init reach it,
+    # over the compose-internal network. If you must reach it from the host
+    # for debugging, publish "127.0.0.1:11434:11434" — never a LAN-visible
+    # bind (same no-auth localhost rule as the app).
+    volumes:
+      # Model store (/root/.ollama). Named volume, so the multi-GB pull
+      # happens once and survives `docker compose down`.
+      - ollama-models:/root/.ollama
+    restart: unless-stopped
+
+  ollama-pull:
+    image: ollama/ollama
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      # Talk to the sidecar's API instead of starting a second server.
+      OLLAMA_HOST: http://ollama:11434
+      # The model to pre-pull; override via OLLAMA_MODEL in .env
+      # (see .env.example for the higher-accuracy 27B upgrade path).
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:4b-instruct-2507-q4_K_M}
+    entrypoint: ["/bin/sh", "-c"]
+    # Wait for the sidecar, then pull the model unless the model volume
+    # already has it (`ollama show` succeeding means it is present, so
+    # subsequent starts don't re-pull). `$$` is compose-escaping for a
+    # literal shell `$`.
+    command:
+      - |
+        until ollama list >/dev/null 2>&1; do sleep 1; done
+        if ollama show "$$OLLAMA_MODEL" >/dev/null 2>&1; then
+          echo "[ollama-pull] $$OLLAMA_MODEL already present - nothing to do"
+        else
+          echo "[ollama-pull] pulling $$OLLAMA_MODEL ..."
+          ollama pull "$$OLLAMA_MODEL"
+        fi
+    restart: "no"
+
+volumes:
+  jobfinder-data:
+  ollama-models:

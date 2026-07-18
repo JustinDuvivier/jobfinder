@@ -12,7 +12,8 @@
 *.tsbuildinfo
 next-env.d.ts
 
-# local env & secrets
+# local env & secrets (.env is the docker-compose config — real keys live there)
+.env
 .env*.local
 
 # local database
@@ -22,6 +23,9 @@ next-env.d.ts
 
 # personal resume assets (user-supplied, never committed)
 /resume
+
+# saved resume packages from the docker-compose ./output bind mount
+/output
 
 # eval run output (session artifact; the eval set itself lives in golden/)
 /scripts/eval-score-results.json
