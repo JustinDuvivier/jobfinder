@@ -15,6 +15,7 @@ const {
   getUserConfigMock,
   getLastScrapeEndedAtMock,
   runScrapeMock,
+  runScoringMock,
   runScheduledScoringMock,
   fireNotifierMock,
 } = vi.hoisted(() => ({
@@ -22,6 +23,7 @@ const {
   getUserConfigMock: vi.fn(),
   getLastScrapeEndedAtMock: vi.fn(),
   runScrapeMock: vi.fn(),
+  runScoringMock: vi.fn(),
   runScheduledScoringMock: vi.fn(),
   fireNotifierMock: vi.fn(),
 }));
@@ -31,6 +33,7 @@ vi.mock('@/lib/db/repo', () => ({
   getLastScrapeEndedAt: getLastScrapeEndedAtMock,
 }));
 vi.mock('@/lib/scrape/run', () => ({ runScrape: runScrapeMock }));
+vi.mock('@/lib/scoring/run', () => ({ runScoring: runScoringMock }));
 vi.mock('@/lib/scoring/scheduled', () => ({ runScheduledScoring: runScheduledScoringMock }));
 // The notifier spawns a real process — always injected here (no real toasts).
 vi.mock('@/lib/notify/notifier', () => ({ fireNotifier: fireNotifierMock }));
@@ -60,6 +63,7 @@ beforeEach(() => {
   getUserConfigMock.mockReset().mockReturnValue(undefined);
   getLastScrapeEndedAtMock.mockReset().mockReturnValue(null);
   runScrapeMock.mockReset().mockResolvedValue({ inserted: 3 });
+  runScoringMock.mockReset().mockResolvedValue(scoringSummary());
   runScheduledScoringMock.mockReset().mockResolvedValue(scoringSummary());
   fireNotifierMock.mockReset();
 });
@@ -75,14 +79,42 @@ describe('getScheduler', () => {
   });
 });
 
+describe('trigger routing — which scoring transport a run uses', () => {
+  // The Batch API's latency-for-discount trade (NFR-2) is justified only when
+  // nobody is watching. "Run now" is watched — the user pressed the button —
+  // so it must score through the interactive transport (runScoring), never the
+  // headless scheduled path that batches Anthropic scoring for tens of minutes.
+  it('Run now (triggerNow) scores through the interactive transport, not the headless path', async () => {
+    await getScheduler().triggerNow();
+
+    expect(runScoringMock).toHaveBeenCalledWith(FAKE_DB);
+    expect(runScheduledScoringMock).not.toHaveBeenCalled();
+  });
+
+  it('a timer-fired run scores through the headless scheduled path, not the interactive one', async () => {
+    vi.useFakeTimers();
+    try {
+      getUserConfigMock.mockReturnValue({ runIntervalMinutes: 5 });
+      syncSchedulerFromConfig();
+
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+
+      expect(runScheduledScoringMock).toHaveBeenCalledWith(FAKE_DB);
+      expect(runScoringMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('the run job', () => {
-  it('scrapes first, then runs the scheduled scoring, against the same DB', async () => {
+  it('scrapes first, then scores, against the same DB', async () => {
     const order: string[] = [];
     runScrapeMock.mockImplementation(async () => {
       order.push('scrape');
       return { inserted: 3 };
     });
-    runScheduledScoringMock.mockImplementation(async () => {
+    runScoringMock.mockImplementation(async () => {
       order.push('score');
       return scoringSummary();
     });
@@ -91,7 +123,7 @@ describe('the run job', () => {
 
     expect(order).toEqual(['scrape', 'score']);
     expect(runScrapeMock).toHaveBeenCalledWith(FAKE_DB);
-    expect(runScheduledScoringMock).toHaveBeenCalledWith(FAKE_DB);
+    expect(runScoringMock).toHaveBeenCalledWith(FAKE_DB);
   });
 
   it('records the run summary on the scheduler', async () => {
@@ -102,7 +134,7 @@ describe('the run job', () => {
   });
 
   it('appends the title-filtered count only when nonzero', async () => {
-    runScheduledScoringMock.mockResolvedValue(scoringSummary({ titleFiltered: 2 }));
+    runScoringMock.mockResolvedValue(scoringSummary({ titleFiltered: 2 }));
     await getScheduler().triggerNow();
     expect(getScheduler().status().lastSummary).toBe('3 new · 12 scored · 2 title-filtered');
   });
@@ -110,6 +142,7 @@ describe('the run job', () => {
   it('records a scrape failure as the run error and never reaches scoring', async () => {
     await getScheduler().triggerNow(); // a prior successful run
     runScrapeMock.mockRejectedValue(new Error('guest API returned 429'));
+    runScoringMock.mockClear();
     runScheduledScoringMock.mockClear();
 
     await getScheduler().triggerNow();
@@ -118,14 +151,15 @@ describe('the run job', () => {
     expect(status.lastError).toBe('guest API returned 429');
     // Failure sets lastError only; the previous run's summary is retained.
     expect(status.lastSummary).toBe('3 new · 12 scored');
+    expect(runScoringMock).not.toHaveBeenCalled();
     expect(runScheduledScoringMock).not.toHaveBeenCalled();
   });
 
   it('records a scoring failure as the run error even after a successful scrape', async () => {
-    runScheduledScoringMock.mockRejectedValue(new Error('batch create failed'));
+    runScoringMock.mockRejectedValue(new Error('ANTHROPIC_API_KEY is not set'));
     await getScheduler().triggerNow();
     expect(runScrapeMock).toHaveBeenCalled();
-    expect(getScheduler().status().lastError).toBe('batch create failed');
+    expect(getScheduler().status().lastError).toBe('ANTHROPIC_API_KEY is not set');
   });
 });
 
@@ -134,7 +168,7 @@ describe('withFailureToast', () => {
     const notify = vi.fn();
     const job = withFailureToast(async () => '3 new · 12 scored', notify);
 
-    await expect(job()).resolves.toBe('3 new · 12 scored');
+    await expect(job('manual')).resolves.toBe('3 new · 12 scored');
     expect(notify).not.toHaveBeenCalled();
   });
 
@@ -145,7 +179,7 @@ describe('withFailureToast', () => {
       throw boom;
     }, notify);
 
-    await expect(job()).rejects.toBe(boom);
+    await expect(job('manual')).rejects.toBe(boom);
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenCalledWith('⚠️ Scheduled run failed', 'fetch ECONNREFUSED');
   });
@@ -157,7 +191,7 @@ describe('withFailureToast', () => {
       throw new Error(longMessage);
     }, notify);
 
-    await expect(job()).rejects.toThrow();
+    await expect(job('manual')).rejects.toThrow();
     expect(notify).toHaveBeenCalledWith('⚠️ Scheduled run failed', 'x'.repeat(500));
   });
 
@@ -167,7 +201,7 @@ describe('withFailureToast', () => {
       throw 'plain string failure';
     }, notify);
 
-    await expect(job()).rejects.toBe('plain string failure');
+    await expect(job('manual')).rejects.toBe('plain string failure');
     expect(notify).toHaveBeenCalledWith('⚠️ Scheduled run failed', 'plain string failure');
   });
 
@@ -181,7 +215,7 @@ describe('withFailureToast', () => {
       throw boom;
     }, notify);
 
-    await expect(job()).rejects.toBe(boom);
+    await expect(job('manual')).rejects.toBe(boom);
     expect(errorSpy).toHaveBeenCalledTimes(1); // swallowed but logged, not invisible
     errorSpy.mockRestore();
   });
@@ -196,7 +230,7 @@ describe('withFailureToast', () => {
       throw unstringifiable;
     }, notify);
 
-    await expect(job()).rejects.toBe(unstringifiable);
+    await expect(job('manual')).rejects.toBe(unstringifiable);
     expect(notify).not.toHaveBeenCalled();
     errorSpy.mockRestore();
   });
@@ -204,7 +238,7 @@ describe('withFailureToast', () => {
 
 describe('the scheduled-run toast (FR-28)', () => {
   it('fires exactly one toast per run, composed from the run\'s notables', async () => {
-    runScheduledScoringMock.mockResolvedValue(
+    runScoringMock.mockResolvedValue(
       scoringSummary({
         notables: {
           strongMatches: 1,
@@ -230,7 +264,7 @@ describe('the scheduled-run toast (FR-28)', () => {
   });
 
   it('a synchronous notifier failure never fails the run', async () => {
-    runScheduledScoringMock.mockResolvedValue(
+    runScoringMock.mockResolvedValue(
       scoringSummary({
         notables: {
           strongMatches: 0,

@@ -3,11 +3,17 @@
  * process-wide singleton. Kept separate from scheduler.ts so the scheduler's
  * unit tests don't pull in the DB / scraping / AI dependency graph.
  *
- * The run job is the headless equivalent of clicking Scrape then Score all:
- * scrape new postings, then score the freshly inserted `new` rows through
- * runScheduledScoring (lib/scoring/scheduled), which routes by the configured
- * backend — the sequential local loop by default, the Batch API's 50%
- * discount on Anthropic (NFR-2). New jobs and scores land in SQLite; the Jobs
+ * The run job is the equivalent of clicking Scrape then Score all: scrape new
+ * postings, then score the freshly inserted `new` rows. Which scoring
+ * transport a run takes depends on what triggered it (RunTrigger): a
+ * timer-fired `scheduled` run is headless — nobody is watching — so it goes
+ * through runScheduledScoring (lib/scoring/scheduled), which routes by the
+ * configured backend (the sequential local loop by default, the Batch API's
+ * 50% discount on Anthropic, NFR-2). A `manual` "Run now" is watched — the
+ * user pressed the button and is waiting on the Jobs view — so it scores
+ * through the same interactive transport as /api/score (runScoring's bounded
+ * fan-out): the batch discount's tens-of-minutes latency is only free when no
+ * one is looking. New jobs and scores land in SQLite; the Jobs
  * view refetches (it is not an SSE route). A run that scored anything notable
  * (strong matches, FR-6a parks) additionally fires exactly one native toast
  * through the shared notifier (FR-28), and a run that rejects fires a native
@@ -19,8 +25,9 @@ import * as repo from '@/lib/db/repo';
 import { fireNotifier } from '@/lib/notify/notifier';
 import { composeRunToast } from '@/lib/notify/run-toast';
 import { runScrape } from '@/lib/scrape/run';
+import { runScoring } from '@/lib/scoring/run';
 import { runScheduledScoring } from '@/lib/scoring/scheduled';
-import { createScheduler, type Scheduler } from './scheduler';
+import { createScheduler, type RunTrigger, type Scheduler } from './scheduler';
 
 // The singleton lives on globalThis, not module scope: Next.js dev recompiles
 // modules on navigation/HMR, and a module-scoped singleton would be silently
@@ -30,10 +37,13 @@ const g = globalThis as typeof globalThis & {
   __jobFinderSchedulerStarted?: boolean;
 };
 
-async function defaultRunJob(): Promise<string> {
+async function defaultRunJob(trigger: RunTrigger): Promise<string> {
   const db = getDb();
   const scrape = await runScrape(db);
-  const scoring = await runScheduledScoring(db);
+  // A manual "Run now" is watched, so it scores through the interactive
+  // transport; only headless timer-fired runs take the Batch API's
+  // latency-for-discount trade (NFR-2).
+  const scoring = trigger === 'manual' ? await runScoring(db) : await runScheduledScoring(db);
   // At most one native toast per headless run, summarizing this run's notable
   // scores (FR-28); a run with nothing notable stays silent. Fire-and-forget:
   // fireNotifier can throw synchronously, and a missed toast must never fail
@@ -64,12 +74,12 @@ const FAILURE_TOAST_MESSAGE_MAX = 500;
  * never break the scheduler loop or mask the run's own error.
  */
 export function withFailureToast(
-  runJob: () => Promise<string>,
+  runJob: (trigger: RunTrigger) => Promise<string>,
   notify: typeof fireNotifier = fireNotifier,
-): () => Promise<string> {
-  return async () => {
+): (trigger: RunTrigger) => Promise<string> {
+  return async (trigger) => {
     try {
-      return await runJob();
+      return await runJob(trigger);
     } catch (err) {
       try {
         // Message derivation stays inside the guard: String(err) itself can

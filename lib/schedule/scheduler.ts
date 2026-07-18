@@ -35,9 +35,17 @@ export interface SchedulerStatus {
   lastError: string | null;
 }
 
+/**
+ * What started a run: a timer firing on the configured cadence (`scheduled`,
+ * headless — nobody is watching) or the user pressing "Run now" (`manual`,
+ * watched). The run job routes its scoring transport by this — the Batch API's
+ * latency-for-discount trade (NFR-2) is only acceptable for headless runs.
+ */
+export type RunTrigger = 'scheduled' | 'manual';
+
 export interface SchedulerDeps {
   /** Performs one run and resolves with a human-readable summary string. */
-  runJob: () => Promise<string>;
+  runJob: (trigger: RunTrigger) => Promise<string>;
   /** Clock injection point for tests; defaults to Date.now. */
   now?: () => number;
 }
@@ -88,16 +96,16 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
     // fires immediately rather than showing a past time.
     const anchor = lastRunAt ?? now();
     nextRunAt = Math.max(now(), anchor + intervalMs);
-    timer = setTimeout(() => void run(), nextRunAt - now());
+    timer = setTimeout(() => void run('scheduled'), nextRunAt - now());
   }
 
-  async function run(): Promise<void> {
+  async function run(trigger: RunTrigger): Promise<void> {
     if (running) return; // overlap guard
     running = true;
     clearPending();
     nextRunAt = null;
     try {
-      lastSummary = await deps.runJob();
+      lastSummary = await deps.runJob(trigger);
       lastError = null;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
@@ -121,7 +129,7 @@ export function createScheduler(deps: SchedulerDeps): Scheduler {
       if (!running) reschedule();
     },
     triggerNow(): Promise<void> {
-      return run();
+      return run('manual');
     },
     status(): SchedulerStatus {
       return {

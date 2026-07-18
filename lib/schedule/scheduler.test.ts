@@ -55,6 +55,18 @@ describe('createScheduler', () => {
     expect(s.status().nextRunAt).toBe(START + 2 * 60_000 + FIVE_MIN);
   });
 
+  it('tells the run job what triggered it: manual for triggerNow, scheduled for timer fires', async () => {
+    const runJob = vi.fn(async () => 'ok');
+    const s = createScheduler({ runJob });
+    s.configure(5);
+
+    await s.triggerNow();
+    expect(runJob).toHaveBeenLastCalledWith('manual');
+
+    await vi.advanceTimersByTimeAsync(FIVE_MIN);
+    expect(runJob).toHaveBeenLastCalledWith('scheduled');
+  });
+
   it('does not start a second run while one is in flight (overlap guard)', async () => {
     let resolve!: () => void;
     const gate = new Promise<void>((r) => {
