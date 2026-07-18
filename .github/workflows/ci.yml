@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Same TeX collections as the Docker image, so the LaTeX integration
+      # tests (incl. the one-page starter-template guarantee) run rather
+      # than self-skipping on a pdflatex-less runner.
+      - name: Install TeX Live
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            texlive-latex-recommended texlive-latex-extra texlive-fonts-recommended
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test

@@ -1,5 +1,9 @@
 # JobFinder
 
+[![CI](https://github.com/JustinDuvivier/jobfinder/actions/workflows/ci.yml/badge.svg)](https://github.com/JustinDuvivier/jobfinder/actions/workflows/ci.yml)
+[![Container image](https://img.shields.io/badge/ghcr.io-justinduvivier%2Fjobfinder-blue)](https://github.com/JustinDuvivier/jobfinder/pkgs/container/jobfinder)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 A self-hosted, single-user job-application pipeline: **scrape** fresh LinkedIn postings → **score** each against your resume → **decide** which to pursue → **tailor** your LaTeX resume with AI (streaming side-by-side editor, diff, and rationale) → save an approved, **exactly-one-page PDF** to a dated folder → **track** every application through the hiring pipeline.
 
 It runs on your own machine, for one person: one Next.js process, one SQLite file, no accounts. Scoring runs free on a local Ollama model by default; the resume rewrite runs on Claude (an Anthropic API key is the only paid requirement for a typical session — a few cents per tailored resume).
@@ -14,7 +18,7 @@ It runs on your own machine, for one person: one Next.js process, one SQLite fil
 Prerequisites: [Docker](https://docs.docker.com/get-docker/) with Compose, and an [Anthropic API key](https://console.anthropic.com/).
 
 ```sh
-git clone <this-repo>
+git clone https://github.com/JustinDuvivier/jobfinder.git
 cd jobfinder
 cp .env.example .env       # then edit .env and set ANTHROPIC_API_KEY
 docker compose up
@@ -22,11 +26,11 @@ docker compose up
 
 Then open **http://127.0.0.1:3000**.
 
-The first start is slow, once: the image build installs a mid-size TeX Live (~1.7 GB) so the whole pipeline — including PDF compilation — runs in the container, and a one-shot init service pulls the ~2.5 GB local scoring model into a persistent volume. Later starts skip both.
+The first start is slow, once: Docker pulls the prebuilt app image (it ships a mid-size TeX Live so the whole pipeline — including PDF compilation — runs in the container), and a one-shot init service pulls the ~2.5 GB local scoring model into a persistent volume. Later starts skip both.
 
 What the stack is:
 
-- **app** — the Next.js app + TeX Live, built from this repo's `Dockerfile`. Published on `127.0.0.1:3000` only.
+- **app** — the Next.js app + TeX Live, pulled prebuilt from `ghcr.io/justinduvivier/jobfinder` (published by this repo's release workflow). Published on `127.0.0.1:3000` only. Contributors can build from source instead: `docker compose -f docker-compose.yml -f docker-compose.build.yml up --build`.
 - **ollama** — the local-scoring sidecar (free, CPU-friendly scoring is the default). Not published on any port.
 - **ollama-pull** — a one-shot init that pre-pulls the scoring model, then exits.
 
@@ -92,14 +96,14 @@ JobFinder reads LinkedIn's **public guest endpoints** — the pages behind the l
 The image ships a mid-size TeX Live (`texlive-latex-recommended`, `texlive-latex-extra`, `texlive-fonts-recommended`) that covers standard resume templates. If your resume needs packages outside that set, extend the image — Debian's TeX Live has no usable `tlmgr`, so add Debian collections in a derived image:
 
 ```dockerfile
-FROM jobfinder
+FROM ghcr.io/justinduvivier/jobfinder:latest
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
       texlive-science texlive-fonts-extra && rm -rf /var/lib/apt/lists/*
 USER node
 ```
 
-Build it with `docker build -t jobfinder .` first, then build and run the derived image in its place.
+Build the derived image (`docker build -t jobfinder-extended -f your.Dockerfile .`) and point the `app` service's `image:` at it in a compose override.
 
 ## Running natively (without Docker)
 

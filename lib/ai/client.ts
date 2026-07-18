@@ -14,7 +14,7 @@ export function getAnthropicClient(): Anthropic {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new Error(
-      'ANTHROPIC_API_KEY is not set. Copy .env.local.example to .env.local and set it.',
+      'ANTHROPIC_API_KEY is not set. Add it to .env.local (native) or .env (docker compose) — see the README.',
     );
   }
   singleton = new Anthropic({ apiKey });

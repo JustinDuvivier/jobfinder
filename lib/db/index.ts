@@ -105,7 +105,7 @@ export function getDb(): DB {
   const path = process.env.JOBFINDER_DB_PATH;
   if (!path) {
     throw new Error(
-      'JOBFINDER_DB_PATH is not set. Copy .env.local.example to .env.local and set it.',
+      'JOBFINDER_DB_PATH is not set. Add it to .env.local (native) — see the README. The Docker image sets it automatically.',
     );
   }
   singleton = openDatabase(path);

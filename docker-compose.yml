@@ -5,7 +5,8 @@
 #   open http://localhost:3000
 #
 # Topology:
-#   app         — the Next.js app + TeX Live (built from ./Dockerfile)
+#   app         — the Next.js app + TeX Live (prebuilt image from GHCR;
+#                 contributors: docker-compose.build.yml builds from source)
 #   ollama      — local-scoring sidecar (free CPU scoring is the default)
 #   ollama-pull — one-shot init: pulls the scoring model into the model
 #                 volume on first start; no-ops when it is already there
@@ -17,7 +18,7 @@
 
 services:
   app:
-    build: .
+    image: ghcr.io/justinduvivier/jobfinder:latest
     ports:
       - "127.0.0.1:3000:3000"
     environment:
