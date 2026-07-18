@@ -1,0 +1,17 @@
+% Golden reference: a minimal, package-free resume that must compile to exactly
+% one page (asserted by the page-count check). Deliberately uses no external
+% packages so the compile integration test runs offline without triggering a
+% TeX-distribution package install.
+\documentclass[11pt]{article}
+\begin{document}
+\begin{center}
+  {\Large \textbf{Alex Candidate}}\\
+  Software Engineer \textbullet{} New York, NY
+\end{center}
+
+\noindent\textbf{Experience}\\
+Built and shipped production systems. Reduced p99 latency. Led a small team.
+
+\noindent\textbf{Skills}\\
+TypeScript, Python, distributed systems, LLM applications.
+\end{document}

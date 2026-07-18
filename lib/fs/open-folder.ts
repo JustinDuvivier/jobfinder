@@ -1,0 +1,53 @@
+/**
+ * Open the folder containing a saved resume PDF in the OS file manager.
+ *
+ * SECURITY (NFR-7): this is reached only with a server-resolved path (read from
+ * SQLite by job_id), never a client-supplied string, and it additionally
+ * verifies the path resolves *inside* the configured output base directory
+ * before opening. An "open folder" action is an OS shell operation, so the
+ * identifier-in / path-out boundary is enforced here just as it is for /api/save.
+ */
+import { spawn } from 'node:child_process';
+import { dirname, resolve, sep } from 'node:path';
+
+/**
+ * True iff `target` resolves to `base` or a path strictly inside it. Comparison
+ * is case-insensitive on Windows and enforces a separator boundary so that
+ * `.../jobs` does not match a sibling `.../jobs-other`.
+ */
+export function isWithinBase(target: string, base: string): boolean {
+  const normalize = (p: string): string =>
+    process.platform === 'win32' ? resolve(p).toLowerCase() : resolve(p);
+  const baseResolved = normalize(base);
+  const targetResolved = normalize(target);
+  if (targetResolved === baseResolved) return true;
+  const prefix = baseResolved.endsWith(sep) ? baseResolved : baseResolved + sep;
+  return targetResolved.startsWith(prefix);
+}
+
+/** Spawn the platform's folder opener (best-effort; does not block on it). */
+export function openFolder(dir: string): void {
+  const command =
+    process.platform === 'win32'
+      ? 'explorer.exe'
+      : process.platform === 'darwin'
+        ? 'open'
+        : 'xdg-open';
+  const child = spawn(command, [dir], { stdio: 'ignore', detached: true });
+  // explorer.exe exits non-zero even on success; we don't await the result.
+  child.on('error', () => {});
+  child.unref();
+}
+
+/**
+ * Verify a saved file path is inside the base directory, then open its
+ * containing folder. Returns the folder path. Throws if the path escapes base.
+ */
+export function openContainingFolder(filePath: string, baseDir: string): string {
+  if (!isWithinBase(filePath, baseDir)) {
+    throw new Error('Refusing to open a path outside the output directory');
+  }
+  const dir = dirname(resolve(filePath));
+  openFolder(dir);
+  return dir;
+}

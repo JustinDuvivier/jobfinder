@@ -1,0 +1,91 @@
+% ============================================================================
+% JobFinder — starter resume (generic example)
+%
+% This is the committed fallback the app uses until you supply your own resume.
+% To use your own: create a gitignored `resume/` directory next to this one and
+% put your real `base_resume.tex` there (plus your own source_of_truth.md,
+% scoring_prompt.md, and rewrite_rules.md). Files in `resume/` always win over
+% the copies in `resume-example/`; you can also paste the LaTeX straight into
+% the Setup page, which overrides both.
+%
+% Two constraints to keep when you replace it:
+%   1. It must compile to EXACTLY one page — /api/save refuses anything else
+%      (the one-page invariant). Trim content, not the page check.
+%   2. It is compiled with `pdflatex -no-shell-escape` in a sandbox. This
+%      example deliberately uses no external packages so it compiles on any
+%      TeX distribution without downloading anything; your own resume may use
+%      packages you have installed (geometry, enumitem, hyperref, ...).
+% ============================================================================
+\documentclass[11pt]{article}
+
+% --- Layout, set by hand so no packages are needed --------------------------
+\setlength{\oddsidemargin}{-0.25in}   % 1in default margin - 0.25in = 0.75in
+\setlength{\textwidth}{7.0in}
+\setlength{\topmargin}{-0.5in}
+\setlength{\textheight}{9.5in}
+\setlength{\parindent}{0pt}           % resumes don't indent paragraphs
+\pagestyle{empty}                     % no page number on a one-page resume
+
+% --- Small helpers ----------------------------------------------------------
+% A section heading with a full-width rule under it.
+\newcommand{\resumesection}[1]{%
+  \vspace{8pt}{\large\textbf{#1}}\\[-6pt]\rule{\textwidth}{0.4pt}\\[2pt]}
+% One job header line: role/company on the left, dates/location on the right.
+\newcommand{\rolehead}[2]{\textbf{#1} \hfill #2\\}
+
+\begin{document}
+
+% --- Header -----------------------------------------------------------------
+\begin{center}
+  {\LARGE \textbf{Alex Candidate}}\\[2pt]
+  Software Engineer \textbullet{} Example City, ST \textbullet{}
+  alex@example.com \textbullet{} github.com/alexcandidate
+\end{center}
+
+% --- Experience -------------------------------------------------------------
+% Keep bullets short, factual, and quantified. Every claim here should be
+% backed by an entry in source_of_truth.md — the rewrite step is only allowed
+% to say things that document supports.
+\resumesection{Experience}
+
+\rolehead{Software Engineer, Example Corp}{Jan 2025 -- Present \textbullet{} Example City, ST}
+\begin{itemize}
+  \item Built and shipped a customer-facing document search service in
+        \textbf{Python} and \textbf{TypeScript}, serving 1{,}000+ daily queries.
+  \item Reduced p95 API latency 40\% by profiling and caching the hottest
+        retrieval path.
+  \item Added evaluation and monitoring hooks so regressions surface before
+        release.
+\end{itemize}
+
+\rolehead{Engineering Intern, Sample Startup}{Jun 2024 -- Dec 2024 \textbullet{} Remote}
+\begin{itemize}
+  \item Automated a manual reporting workflow with scheduled \textbf{Python}
+        jobs, saving the team roughly two hours per day.
+  \item Wrote integration tests that caught three production-bound bugs.
+\end{itemize}
+
+% --- Projects ---------------------------------------------------------------
+\resumesection{Projects}
+
+\rolehead{JobFinder (personal project)}{2026}
+\begin{itemize}
+  \item Local job-application pipeline: scrape, score, and tailor a LaTeX
+        resume per posting, with a one-page compile check before saving.
+\end{itemize}
+
+% --- Education --------------------------------------------------------------
+\resumesection{Education}
+
+\rolehead{B.S. Computer Science, State University}{Graduated 2024}
+
+% --- Skills -----------------------------------------------------------------
+% The rewrite step may reorder these to front-load a job's keywords, but it
+% must never add a tool that source_of_truth.md doesn't list.
+\resumesection{Skills}
+
+\textbf{Languages:} Python, TypeScript, SQL\\
+\textbf{Tools:} Git, Docker, PostgreSQL, FastAPI, React\\
+\textbf{Practices:} testing, CI/CD, code review, profiling
+
+\end{document}

@@ -1,0 +1,214 @@
+{
+  "description": "Golden eval set for the scoring prompt (FR-6/FR-7): one fixed candidate and twelve job postings paired with constraint-based expectations. Built to compare scoring models (e.g. Haiku vs. a local Ollama model) on the failure modes that decide this task: literal years-of-experience reading, quote fidelity, gap arithmetic, cap-consistent scoring — and recall on genuine matches, which the threshold filter (FR-9a) makes the costliest failure: an underscored match is hidden from the decision queue, while an overscored dud just gets passed on manually. Model output is non-deterministic, so expectations are constraints — exact where the task is deterministic (copying a quote, reading a number), ranges where judgment is legitimate (the score) — never full-reply snapshots. The three real cases reuse the captured fixtures in golden/job-detail.golden.json; the synthetic cases exist because the random real sample contains neither big-gap/range-phrased requirements (where small models shrink '10+ years' to 1) nor strong-fit postings (where underscoring would hide a real match).",
+  "authoredAt": "2026-07-12",
+  "candidateYearsRange": [1, 2],
+  "candidateYearsNote": "resume/source_of_truth.md states the years explicitly (~1.3 as of July 2026) and scoring_prompt.md Step 2 tells the model to copy that number rather than re-derive it from dates. The [1, 2] range tolerates rounding to 1 or 1.5; anything outside it means the model ignored the stated figure. Graded against experience.candidate_years in the raw reply of every case.",
+  "promptAssembly": {
+    "system": [
+      "contents of resume/scoring_prompt.md",
+      "SCORING_CONTRACT exported from lib/ai/score.ts",
+      "Candidate professional profile.\n\nSource of truth (real accomplishments, metrics, skills):\n{contents of resume/source_of_truth.md}\n\nResume (plain text):\n{latexToPlainText(resume/base_resume.tex) — lib/latex/to-plain-text.ts}"
+    ],
+    "user": "Score this job against the candidate above.\n\nJob description:\n{case job description}",
+    "jobDescriptionFormat": "describeJob(job) from lib/jobs/describe.ts: a '<title> at <company>' header, optional metadata lines (Location / Salary / Seniority level / Employment type / Job function / Industries / Applicants), a blank line, then the description. Real cases: rebuild from golden/jobs.parse.golden.json (title, company, location) plus golden/job-detail.golden.json (description and criteria) for the case's jobId. Synthetic cases: use the inline jobDescription verbatim — it is already in this format.",
+    "decodingNote": "Run the local model at temperature 0 for reproducible comparisons; the Anthropic call uses the app's defaults (buildScoreRequest in lib/ai/score.ts)."
+  },
+  "grading": {
+    "rawVsParsed": "Every expected.* check except scoreRange grades the model's RAW JSON reply — before lib/ai/score.ts re-derives required_years from the copied quote, applies gapScoreCap, and parks inferred big-gap reads at 70 (FR-6a). This is deliberate: the app's code-side corrections would mask exactly the model failures this set exists to surface. scoreRange grades the score AFTER parseScoreResponse, i.e. what the app would persist.",
+    "expectedFieldSemantics": {
+      "requiredQuote.contains": "the raw required_quote must contain this fragment verbatim, digits unaltered. The fragment also appears verbatim in the posting, and requiredYearsFromQuote(fragment) equals requiredYears.exact — both enforced by lib/ai/score.golden.test.ts.",
+      "requiredQuote.equals": "the raw required_quote must be exactly this string (trimmed, case-insensitive).",
+      "requiredYears": "the raw experience.required_years — exact value, or inclusive [min, max] where the prompt asks the model to infer from title seniority.",
+      "gapYearsRange": "inclusive bounds on the raw experience.gap_years; always [requiredMin - candidateMax, requiredMax - candidateMin].",
+      "scoreRange": "inclusive bounds on the parsed, post-cap score. Park rule (FR-6a): when the raw quote has no readable years figure (requiredYearsFromQuote yields null — an inferred requirement) and the gap cap would land below 70, the app persists exactly 70 with a review flag — cases whose expected gap always exceeds 2 years on an inferred quote therefore expect exactly [70, 70].",
+      "yearsRowVerdicts": "allowed verdict values on the first comparison row; omitted means unconstrained.",
+      "concernsMustMentionShortfall": "when true, at least one concerns entry must reference the experience shortfall (heuristic: matches /(yrs?|years?|experience)/i).",
+      "recallCritical": "when true, this posting is a genuine match: a parsed score below scoreRange[0] would hide it behind the FR-9a threshold filter — the costliest failure mode. Grade underscores on these cases as recall misses; a score above scoreRange[1] anywhere is only queue noise the user can pass on."
+    },
+    "structuralChecks": [
+      "Reply is a single JSON object: first non-whitespace character is '{', last is '}', no code fences, no surrounding prose.",
+      "experience object present with required_quote (string) and finite numbers for candidate_years, required_years, gap_years.",
+      "experience.gap_years is within 0.6 of required_years - candidate_years.",
+      "experience.candidate_years is within the top-level candidateYearsRange.",
+      "score is a number in 0-100, and the raw score is at most gapScoreCap(raw gap_years) + 5 — the model must score consistently with its own gap read.",
+      "reasoning is a non-empty string of at most ~60 words.",
+      "comparison has 4-6 rows; the first row's dimension is exactly 'Years of experience'; every row has a dimension and at least one of you/them; every verdict is 'match', 'partial', or 'gap'.",
+      "key_matches has 2-4 entries and concerns 1-3 entries, all strings."
+    ]
+  },
+  "cases": [
+    {
+      "id": "kustomer-fullstack-4439394341",
+      "source": { "type": "job-detail-golden", "jobId": "4439394341" },
+      "title": "Software Engineer, Full Stack (Early Career)",
+      "company": "Kustomer",
+      "probes": "No explicit years anywhere in the posting — must answer 'none stated' and infer roughly 1 from the Early Career title, not quote the degree requirement. Strong stack fit (Node, React, AI tooling) should land a high score with no cap.",
+      "expected": {
+        "requiredQuote": { "equals": "none stated" },
+        "requiredYears": { "range": [0, 2] },
+        "gapYearsRange": [-2, 1],
+        "scoreRange": [50, 88],
+        "yearsRowVerdicts": ["match", "partial"],
+        "concernsMustMentionShortfall": false,
+        "recallCritical": true
+      }
+    },
+    {
+      "id": "cnn-mle-ii-4411824326",
+      "source": { "type": "job-detail-golden", "jobId": "4411824326" },
+      "title": "Machine Learning Engineer II, CNN Digital Products and Services",
+      "company": "CNN",
+      "probes": "Explicit '2+ years' production-ML requirement plus a graduate-degree ask; candidate is GenAI-heavy with thin classic-ML production experience — a moderate, capped fit.",
+      "expected": {
+        "requiredQuote": { "contains": "2+ years" },
+        "requiredYears": { "exact": 2 },
+        "gapYearsRange": [0, 1],
+        "scoreRange": [35, 72],
+        "concernsMustMentionShortfall": false
+      }
+    },
+    {
+      "id": "james-aiml-4439558832",
+      "source": { "type": "job-detail-golden", "jobId": "4439558832" },
+      "title": "Machine Learning Engineer",
+      "company": "James Search Group",
+      "probes": "Requirement phrased in prose ('Minimum of 2 years'' experience applying advanced analytics methods') rather than a headline bullet; insurance domain is adjacent at best.",
+      "expected": {
+        "requiredQuote": { "contains": "2 years" },
+        "requiredYears": { "exact": 2 },
+        "gapYearsRange": [0, 1],
+        "scoreRange": [30, 70],
+        "concernsMustMentionShortfall": false
+      }
+    },
+    {
+      "id": "synthetic-10plus-distributed",
+      "source": { "type": "inline" },
+      "probes": "The canonical small-model failure (scoring_prompt.md Example A): '10+ years' must read as at least 10, never 1 or 1-3. Gap of 5+ years must crush the score regardless of stack overlap.",
+      "jobDescription": "Staff Software Engineer, Distributed Systems at Corestream Data\nLocation: New York, NY\nSeniority level: Mid-Senior level\nEmployment type: Full-time\n\nCorestream Data builds the real-time ingestion backbone used by analytics teams at some of the largest consumer platforms in the world. Our pipeline moves trillions of events a day across regions, and correctness under partial failure is the product.\n\nWhat you'll do:\n- Own the design and evolution of our replicated log and its consensus layer\n- Lead multi-quarter projects across storage, replication, and query serving\n- Set the technical bar for a team of senior engineers through design review and mentorship\n\nRequirements:\n- 10+ years of experience in distributed systems, including consensus protocols, replication, and partition tolerance in production\n- Deep fluency in Go or Rust and in performance work at the storage layer\n- A track record of leading architecture across multiple teams",
+      "expected": {
+        "requiredQuote": { "contains": "10+ years" },
+        "requiredYears": { "exact": 10 },
+        "gapYearsRange": [8, 9],
+        "scoreRange": [5, 30],
+        "yearsRowVerdicts": ["gap"],
+        "concernsMustMentionShortfall": true
+      }
+    },
+    {
+      "id": "synthetic-range-floor-3-5",
+      "source": { "type": "inline" },
+      "probes": "A range requirement: '3-5 years' must read as its floor, 3 — not 5, not 4. Gap of 1-2 years caps the score at ~70 despite a decent ML fit.",
+      "jobDescription": "Machine Learning Engineer at Meridian Health AI\nLocation: Remote (US)\nEmployment type: Full-time\n\nMeridian Health AI builds risk-prediction and care-navigation models used by regional health systems. You will join a small applied ML team that owns models end to end, from feature pipelines to serving and monitoring.\n\nWhat you'll do:\n- Train, evaluate, and ship classification and forecasting models on clinical and claims data\n- Build and maintain feature pipelines and model-serving endpoints in Python\n- Run experiments and A/B tests to validate model impact with product and clinical teams\n\nRequirements:\n- 3-5 years of experience building and shipping machine learning systems in production\n- Strong Python plus scikit-learn, pandas, and SQL\n- Experience deploying models behind APIs and monitoring them in production\n- Healthcare or other regulated-domain experience is a plus",
+      "expected": {
+        "requiredQuote": { "contains": "3-5 years" },
+        "requiredYears": { "exact": 3 },
+        "gapYearsRange": [1, 2],
+        "scoreRange": [30, 70],
+        "yearsRowVerdicts": ["gap", "partial"],
+        "concernsMustMentionShortfall": true
+      }
+    },
+    {
+      "id": "synthetic-prose-range-7-to-10",
+      "source": { "type": "inline" },
+      "probes": "A prose range: '7 to 10 years' must read as 7. The resulting 5+ year gap must cap the score at ~30 even though the floor, not the ceiling, is the bar.",
+      "jobDescription": "Engineering Lead, Platform at Harborline\nLocation: Brooklyn, NY\nEmployment type: Full-time\n\nHarborline is a logistics platform coordinating freight across ports, rail, and trucking. The platform team owns the core services, developer tooling, and infrastructure that every product team builds on.\n\nWhat you'll do:\n- Lead a team of platform engineers while staying hands-on in TypeScript and Go services\n- Drive reliability, observability, and cost work across the platform\n- Partner with product engineering leads on roadmaps and system design\n\nRequirements:\n- 7 to 10 years of professional software engineering experience\n- Prior experience leading engineers as a tech lead or manager\n- Depth in cloud infrastructure (AWS), CI/CD, and service architecture",
+      "expected": {
+        "requiredQuote": { "contains": "7 to 10 years" },
+        "requiredYears": { "exact": 7 },
+        "gapYearsRange": [5, 6],
+        "scoreRange": [5, 30],
+        "yearsRowVerdicts": ["gap"],
+        "concernsMustMentionShortfall": true
+      }
+    },
+    {
+      "id": "synthetic-none-stated-senior",
+      "source": { "type": "inline" },
+      "probes": "No years stated on a Senior-titled role: must answer 'none stated' and infer roughly 6 from the title (not quote the 99.99% availability figure). The raw score stays low per the caps, but the requirement is inferred and the gap exceeds 2 years, so the app parks the persisted score at exactly 70 with the review flag (FR-6a).",
+      "jobDescription": "Senior Backend Engineer at Lattice Freight\nLocation: New York, NY\nSeniority level: Mid-Senior level\nEmployment type: Full-time\n\nLattice Freight runs the pricing and booking engine behind a national freight marketplace. Our booking API is the company's revenue path and runs at 99.99% availability.\n\nWhat you'll do:\n- Design and build the services behind quoting, booking, and settlement\n- Own reliability and performance for high-throughput Node.js and Postgres services\n- Mentor mid-level engineers and lead design reviews\n\nRequirements:\n- A history of owning production backend systems at meaningful scale\n- Depth in Node.js, TypeScript, Postgres, and event-driven architectures\n- Sound judgment on reliability, data integrity, and incident response",
+      "expected": {
+        "requiredQuote": { "equals": "none stated" },
+        "requiredYears": { "range": [5, 7] },
+        "gapYearsRange": [3, 6],
+        "scoreRange": [70, 70],
+        "yearsRowVerdicts": ["gap"],
+        "concernsMustMentionShortfall": true
+      }
+    },
+    {
+      "id": "synthetic-two-digit-11",
+      "source": { "type": "inline" },
+      "probes": "Two-digit literal read: '11 years' is 11, not 1 — the digit-truncation failure documented in lib/ai/score.ts. Gap of 5+ caps at ~30.",
+      "jobDescription": "Principal Infrastructure Engineer at NorthPeak Systems\nLocation: Jersey City, NJ\nEmployment type: Full-time\n\nNorthPeak Systems provides clearing and settlement infrastructure to mid-market brokerages. The infrastructure group owns the private-cloud platform, networking, and the Kubernetes fleet that every trading service runs on.\n\nWhat you'll do:\n- Set multi-year technical direction for compute, networking, and storage\n- Lead the platform's migration to a zero-trust service mesh\n- Act as the final escalation point for the highest-severity incidents\n\nRequirements:\n- 11 years of hands-on infrastructure and platform experience\n- Expert-level Kubernetes, Linux internals, and network engineering\n- Experience operating regulated financial infrastructure",
+      "expected": {
+        "requiredQuote": { "contains": "11 years" },
+        "requiredYears": { "exact": 11 },
+        "gapYearsRange": [9, 10],
+        "scoreRange": [5, 30],
+        "yearsRowVerdicts": ["gap"],
+        "concernsMustMentionShortfall": true
+      }
+    },
+    {
+      "id": "synthetic-entry-genai-match",
+      "source": { "type": "inline" },
+      "probes": "Positive control: a near-perfect fit ('1+ years' LLM apps, RAG + LangGraph + FastAPI + AWS + pgvector, regulated domain) must score HIGH. Catches a model that pattern-matches every posting to a low score.",
+      "jobDescription": "AI Engineer, Applied LLMs at Brightpath Labs\nLocation: Remote (US)\nEmployment type: Full-time\n\nBrightpath Labs builds document-intelligence products for insurance and legal teams. Our core product answers questions over large private document sets with cited, auditable responses.\n\nWhat you'll do:\n- Build and ship retrieval-augmented generation pipelines end to end\n- Design agentic workflows and tool integrations around LLM APIs\n- Own prompt engineering, evaluation harnesses, and quality monitoring in production\n- Work in Python and FastAPI on AWS, with Postgres and pgvector for retrieval\n\nRequirements:\n- 1+ years of experience building LLM-powered applications in production\n- Hands-on work with RAG, LangChain or LangGraph, and vector databases\n- Experience deploying Python services with Docker and CI/CD\n- Bonus: healthcare or other regulated-domain experience",
+      "expected": {
+        "requiredQuote": { "contains": "1+ years" },
+        "requiredYears": { "exact": 1 },
+        "gapYearsRange": [-1, 0],
+        "scoreRange": [65, 95],
+        "yearsRowVerdicts": ["match", "partial"],
+        "concernsMustMentionShortfall": false,
+        "recallCritical": true
+      }
+    },
+    {
+      "id": "synthetic-recall-rag-healthcare",
+      "source": { "type": "inline" },
+      "probes": "Recall probe: a near-mirror of the candidate's current role (healthcare RAG, LangChain/LangGraph, FastAPI, AWS, regulated domain) asking '1-2 years'. Underscoring this hides the candidate's single best match class.",
+      "jobDescription": "AI Engineer, Clinical Document Intelligence at CarePath Analytics\nLocation: Remote (US)\nEmployment type: Full-time\n\nCarePath Analytics builds retrieval systems that let care teams search clinical protocols and payer policy documents in plain English. Our answers cite their sources, and clinical reviewers audit them.\n\nWhat you'll do:\n- Build and tune retrieval-augmented generation pipelines over large clinical document sets\n- Work with clinical subject-matter experts to improve prompting and answer citation quality\n- Ship and monitor Python services (FastAPI) on AWS with Docker and CI/CD\n- Maintain evaluation harnesses and HIPAA-aligned logging around every model call\n\nRequirements:\n- 1-2 years of experience building LLM applications in production\n- Hands-on RAG work with LangChain or LangGraph and a vector store such as pgvector\n- Comfort working in a regulated healthcare environment",
+      "expected": {
+        "requiredQuote": { "contains": "1-2 years" },
+        "requiredYears": { "exact": 1 },
+        "gapYearsRange": [-1, 0],
+        "scoreRange": [70, 95],
+        "yearsRowVerdicts": ["match", "partial"],
+        "concernsMustMentionShortfall": false,
+        "recallCritical": true
+      }
+    },
+    {
+      "id": "synthetic-recall-none-stated-ai",
+      "source": { "type": "inline" },
+      "probes": "Recall probe: strong-fit AI role with no years stated and an unmarked title. A model that infers a high bar from vibes (or quotes a non-years phrase and overstates required_years) would underscore a real match.",
+      "jobDescription": "AI Engineer, Document Intelligence at Fielding Systems\nLocation: New York, NY (Hybrid)\nEmployment type: Full-time\n\nFielding Systems turns messy commercial-lease and contract archives into searchable, structured data for real-estate operators. Our extraction and Q&A features run on LLMs with retrieval over customer document sets.\n\nWhat you'll do:\n- Design retrieval and prompt pipelines that answer questions over private document archives with citations\n- Build the evaluation and monitoring that keeps extraction quality measurable\n- Ship Python and FastAPI services to AWS alongside a small product team\n- Expose retrieval as tools consumable by in-app chat and external agent clients\n\nRequirements:\n- Production experience building LLM or RAG features users rely on\n- Strong Python; experience with vector search (pgvector, ChromaDB, or similar)\n- Pragmatism about evaluation, observability, and failure modes of LLM systems",
+      "expected": {
+        "requiredQuote": { "equals": "none stated" },
+        "requiredYears": { "range": [0, 3] },
+        "gapYearsRange": [-2, 2],
+        "scoreRange": [55, 90],
+        "concernsMustMentionShortfall": false,
+        "recallCritical": true
+      }
+    },
+    {
+      "id": "synthetic-recall-2plus-fullstack-ai",
+      "source": { "type": "inline" },
+      "probes": "Recall probe: full-stack + GenAI product role ('2+ years building web applications') overlapping the candidate's Revature work (Next.js, FastAPI, Bedrock, MCP). A borderline gap read must not push a genuine match under the threshold.",
+      "jobDescription": "Full Stack Engineer, AI Products at Loomworks\nLocation: Remote (US)\nEmployment type: Full-time\n\nLoomworks builds workflow software for professional-services firms, and our AI assistant — chat over the customer's own engagements, documents, and billing data — is the fastest-growing part of the product.\n\nWhat you'll do:\n- Ship assistant features end to end: Next.js and TypeScript on the front, Python FastAPI services behind\n- Integrate LLM APIs (we use AWS Bedrock) with retrieval over customer data, returning cited answers\n- Design tool interfaces so the assistant and external agent clients share the same capabilities\n- Own quality: evaluation datasets, regression checks, and production monitoring for AI features\n\nRequirements:\n- 2+ years of experience building web applications\n- Production work integrating LLM APIs into a real product\n- Strong TypeScript and Python; comfort owning features across the stack",
+      "expected": {
+        "requiredQuote": { "contains": "2+ years" },
+        "requiredYears": { "exact": 2 },
+        "gapYearsRange": [0, 1],
+        "scoreRange": [55, 88],
+        "yearsRowVerdicts": ["match", "partial", "gap"],
+        "concernsMustMentionShortfall": false,
+        "recallCritical": true
+      }
+    }
+  ]
+}

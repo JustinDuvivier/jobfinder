@@ -1,0 +1,2013 @@
+/*
+ * JobFinder — "Daylight Scope" design system.
+ * The tactical precision-instrument aesthetic brought into daylight: a cool
+ * paper canvas, crisp slate neutrals, and a deep brass signal color for the
+ * reticle and primary actions. Monospace HUD data labels paired with a
+ * distinctive display face. Every legacy class name is preserved so all pages
+ * upgrade in place; new utilities are added below for the enhanced views.
+ */
+
+:root {
+  /* Base — cool paper under colored ambient light; surfaces are frosted glass */
+  --bg: #e7ecf6;
+  --bg-2: #dfe6f1;
+  --panel: rgba(255, 255, 255, 0.55);
+  --panel-2: rgba(255, 255, 255, 0.4);
+  --panel-3: rgba(255, 255, 255, 0.3);
+  --border: rgba(120, 135, 170, 0.28);
+  --border-bright: rgba(110, 125, 160, 0.45);
+
+  /* Liquid-glass primitives */
+  --glass-blur: saturate(1.7) blur(18px);
+  --glass-edge: rgba(255, 255, 255, 0.7);
+  --glass-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.65);
+
+  --text: #1a2230;
+  --muted: #586273;
+  --faint: #87909f;
+
+  /* Signal — deep brass / scope reticle (the hero accent) */
+  --signal: #9a7414;
+  --signal-dim: #795b0d;
+  --signal-glow: rgba(154, 116, 20, 0.13);
+  /* Text/icon color that sits on top of a solid --signal fill */
+  --on-signal: #ffffff;
+
+  /* Cool secondary — steel blue for links/info */
+  --steel: #2664bd;
+
+  --accent: var(--signal);
+  --accent-2: var(--signal-dim);
+
+  --green: #1f9d57;
+  --amber: #b97d10;
+  --red: #d23f30;
+
+  --green-glow: rgba(31, 157, 87, 0.12);
+  --amber-glow: rgba(185, 125, 16, 0.13);
+  --red-glow: rgba(210, 63, 48, 0.11);
+
+  --radius: 10px;
+  --radius-sm: 7px;
+
+  --display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Consolas, monospace;
+
+  --shadow: var(--glass-highlight), 0 1px 2px rgba(20, 30, 55, 0.05),
+    0 14px 34px -18px rgba(20, 30, 55, 0.28);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--display);
+  font-size: 14px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/*
+ * Atmospheric background: soft, colored ambient light blobs on cool paper.
+ * This is the "light source" that the frosted-glass surfaces above refract and
+ * blur — no grid. Fixed + full-cover so it never stops short of the screen edge.
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: -1;
+  pointer-events: none;
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(58% 48% at 10% 4%, rgba(154, 116, 20, 0.2), transparent 72%),
+    radial-gradient(54% 46% at 94% 10%, rgba(38, 100, 189, 0.2), transparent 72%),
+    radial-gradient(52% 52% at 78% 96%, rgba(138, 85, 200, 0.18), transparent 72%),
+    radial-gradient(48% 44% at 24% 100%, rgba(14, 158, 143, 0.16), transparent 72%);
+}
+
+/*
+ * Liquid glass: every elevated surface frosts the colored ambient field behind
+ * it. backdrop-filter is what does the blur — the translucent --panel/--panel-2
+ * backgrounds only tint; without this rule they'd look flat.
+ */
+.card,
+table,
+.kpi,
+.funnel,
+.company-card,
+.board-col,
+.job-card,
+.why-box,
+.placeholder-box,
+.tape,
+.queue-chip,
+.rewrite-status,
+.banner,
+.chip,
+.status,
+.steps li,
+button,
+.btn,
+input,
+textarea,
+select {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+
+/* Crisp light edge on the large glass panels */
+.card,
+table,
+.kpi,
+.company-card,
+.board-col,
+.tape,
+.why-box {
+  border-color: var(--glass-edge);
+}
+
+a {
+  color: var(--steel);
+  text-decoration: none;
+}
+a:hover {
+  color: #1a4f9e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- Nav / HUD bar */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.7rem 1.5rem;
+  border-bottom: 1px solid var(--glass-edge);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.45));
+  -webkit-backdrop-filter: saturate(1.8) blur(22px);
+  backdrop-filter: saturate(1.8) blur(22px);
+  box-shadow: var(--glass-highlight), 0 8px 28px -18px rgba(20, 30, 55, 0.4);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.nav .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 1.02rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-right: 1rem;
+}
+/* Reticle brand mark */
+.brand-mark {
+  position: relative;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1.5px solid var(--signal);
+  border-radius: 50%;
+  box-shadow: 0 0 12px -2px var(--signal-glow);
+}
+.brand-mark::before,
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  background: var(--signal);
+}
+.brand-mark::before {
+  left: 50%;
+  top: -4px;
+  bottom: -4px;
+  width: 1.5px;
+  transform: translateX(-50%);
+}
+.brand-mark::after {
+  top: 50%;
+  left: -4px;
+  right: -4px;
+  height: 1.5px;
+  transform: translateY(-50%);
+}
+.nav a,
+.nav .nav-link {
+  position: relative;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-sm);
+  transition: color 0.14s ease, background 0.14s ease;
+}
+.nav a:hover,
+.nav .nav-link:hover {
+  color: var(--text);
+  text-decoration: none;
+  background: var(--panel-2);
+}
+.nav a.active,
+.nav .nav-link.active {
+  color: var(--on-signal);
+  background: var(--signal);
+  font-weight: 700;
+}
+.nav .spacer {
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------- Layout */
+.container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+.container.wide {
+  max-width: min(2440px, 97vw);
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+h1 {
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.2rem;
+}
+h2 {
+  font-family: var(--display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 1.75rem 0 0.6rem;
+}
+/* Tactical eyebrow used above page titles */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--signal-dim);
+  margin: 0 0 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.eyebrow::before {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--signal-dim);
+}
+.muted {
+  color: var(--muted);
+}
+.mono {
+  font-family: var(--mono);
+}
+
+/* ---------------------------------------------------------------- Cards */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 1.1rem;
+  box-shadow: var(--shadow);
+}
+
+.row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.spacer {
+  flex: 1;
+}
+
+/* ---------------------------------------------------------------- Buttons */
+button,
+.btn {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: 1px solid var(--border-bright);
+  background: var(--panel-2);
+  color: var(--text);
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius-sm);
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease,
+    transform 0.06s ease;
+}
+button:hover,
+.btn:hover {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: var(--panel);
+  text-decoration: none;
+}
+button:active,
+.btn:active {
+  transform: translateY(1px);
+}
+button:disabled,
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn-primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--on-signal);
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(154, 116, 20, 0.25);
+}
+.btn-primary:hover {
+  background: #876810;
+  border-color: #876810;
+  color: var(--on-signal);
+  box-shadow: 0 4px 14px -4px rgba(154, 116, 20, 0.45);
+}
+.btn-danger {
+  border-color: rgba(229, 97, 79, 0.5);
+  color: var(--red);
+  background: transparent;
+}
+.btn-danger:hover {
+  border-color: var(--red);
+  background: var(--red-glow);
+  color: #ff8d7d;
+}
+.btn-sm {
+  padding: 0.32rem 0.65rem;
+  font-size: 0.74rem;
+}
+.btn-lg {
+  padding: 0.7rem 1.4rem;
+  font-size: 0.92rem;
+  letter-spacing: 0.03em;
+}
+
+/* Prominent lifecycle status in the rewrite toolbar — sized to match btn-lg. */
+.rewrite-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--signal);
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--signal-dim);
+  border-radius: var(--radius-sm);
+  background: var(--signal-glow);
+}
+.rewrite-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+
+/* ---------------------------------------------------------------- Inputs */
+input,
+textarea,
+select {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.65rem;
+  transition: border-color 0.13s ease, box-shadow 0.13s ease;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-glow);
+}
+input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+input[type='range'] {
+  accent-color: var(--signal);
+  padding: 0;
+  cursor: pointer;
+}
+textarea {
+  resize: vertical;
+}
+label {
+  display: block;
+  margin: 1rem 0 0.35rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+label .hint {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  background: var(--panel-2);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+/* ---------------------------------------------------------------- Tables */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+th,
+td {
+  text-align: left;
+  padding: 0.7rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+th {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: var(--bg-2);
+}
+tbody tr {
+  transition: background 0.1s ease;
+}
+tbody tr:hover {
+  background: rgba(154, 116, 20, 0.05);
+}
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ---------------------------------------------------------------- Badges / status */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border: 1px solid var(--border);
+}
+.badge-green {
+  color: var(--green);
+  border-color: rgba(76, 203, 139, 0.5);
+  background: var(--green-glow);
+}
+.badge-amber {
+  color: var(--amber);
+  border-color: rgba(232, 161, 60, 0.5);
+  background: var(--amber-glow);
+}
+.badge-red {
+  color: var(--red);
+  border-color: rgba(229, 97, 79, 0.5);
+  background: var(--red-glow);
+}
+/* Source-provenance chips in the decision queue — a steel tone for LinkedIn,
+ * a green tone for Greenhouse. Smaller than the score badges to sit inline
+ * next to the company name without crowding the row. */
+.badge-linkedin,
+.badge-greenhouse {
+  font-size: 0.62rem;
+  letter-spacing: 0.03em;
+  padding: 0.05rem 0.4rem;
+  text-transform: uppercase;
+}
+.badge-linkedin {
+  color: var(--steel);
+  border-color: rgba(38, 100, 189, 0.5);
+  background: rgba(38, 100, 189, 0.12);
+}
+.badge-greenhouse {
+  color: var(--green);
+  border-color: rgba(31, 157, 87, 0.5);
+  background: var(--green-glow);
+}
+
+/* Reticle score — a target-lock ring around the numeric score */
+.reticle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 0.85rem;
+  border: 1.5px solid currentColor;
+}
+.reticle::before,
+.reticle::after {
+  content: '';
+  position: absolute;
+  opacity: 0.6;
+}
+/*
+ * Four crosshair ticks that sit just outside the ring and scale with the
+ * element. Each pseudo-element is a thin strip running edge-to-edge (4px past
+ * the circle on both ends); a gradient colors only the 4px protruding past each
+ * edge and leaves the middle (over the digits) transparent. Edge-relative
+ * offsets mean this looks identical at 26px, 30px, or 40px.
+ */
+.reticle::before {
+  left: 50%;
+  top: -4px;
+  bottom: -4px;
+  width: 1.5px;
+  transform: translateX(-50%);
+  background: linear-gradient(
+    to bottom,
+    currentColor 0 4px,
+    transparent 4px calc(100% - 4px),
+    currentColor calc(100% - 4px) 100%
+  );
+}
+.reticle::after {
+  top: 50%;
+  left: -4px;
+  right: -4px;
+  height: 1.5px;
+  transform: translateY(-50%);
+  background: linear-gradient(
+    to right,
+    currentColor 0 4px,
+    transparent 4px calc(100% - 4px),
+    currentColor calc(100% - 4px) 100%
+  );
+}
+.reticle.is-green {
+  color: var(--green);
+}
+.reticle.is-amber {
+  color: var(--amber);
+}
+.reticle.is-red {
+  color: var(--red);
+}
+.reticle.is-empty {
+  color: var(--faint);
+  border-style: dashed;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--mono);
+  padding: 0.18rem 0.55rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+/* Live clock + next-auto-run countdown in the Jobs toolbar */
+.run-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+.run-clock-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.run-clock-next {
+  display: inline-flex;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+  padding: 0.18rem 0.55rem;
+  border-radius: var(--radius-sm);
+  background: var(--signal-glow);
+  border: 1px solid var(--signal-dim);
+  color: var(--signal);
+}
+.run-clock-next.is-running {
+  background: var(--green-glow);
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* ---------------------------------------------------------------- Banners */
+.banner {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.85rem;
+  margin: 0.75rem 0 0;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.banner::before {
+  font-weight: 700;
+}
+.banner-ok {
+  border-color: rgba(76, 203, 139, 0.45);
+  color: var(--green);
+  background: var(--green-glow);
+}
+.banner-ok::before {
+  content: '✓';
+}
+.banner-err {
+  border-color: rgba(229, 97, 79, 0.45);
+  color: var(--red);
+  background: var(--red-glow);
+}
+.banner-err::before {
+  content: '✕';
+}
+.banner-warn {
+  border-color: rgba(232, 161, 60, 0.45);
+  color: var(--amber);
+  background: var(--amber-glow);
+}
+.banner-warn::before {
+  content: '!';
+}
+
+/* ---------------------------------------------------------------- Filter chips */
+.chip-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.chip {
+  font-family: var(--mono);
+  font-size: 0.73rem;
+  letter-spacing: 0.03em;
+  padding: 0.28rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.12s ease;
+  white-space: nowrap;
+}
+.chip:hover {
+  border-color: var(--border-bright);
+  color: var(--text);
+}
+.chip.active {
+  border-color: var(--signal);
+  background: var(--signal-glow);
+  color: var(--signal);
+}
+.chip .count {
+  opacity: 0.7;
+  margin-left: 0.3rem;
+}
+
+/* Field label inline with controls */
+.field-label {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- KPI tiles (dashboard) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.85rem;
+  margin: 1.25rem 0;
+}
+.kpi {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.kpi::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent-color, var(--border-bright));
+}
+.kpi-label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.kpi-value {
+  font-family: var(--display);
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin-top: 0.25rem;
+}
+.kpi-sub {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--faint);
+  margin-top: 0.1rem;
+}
+
+/* Pipeline funnel bar */
+.funnel {
+  display: flex;
+  gap: 2px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  height: 34px;
+}
+.funnel-seg {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--on-signal);
+  min-width: 2.2rem;
+  transition: flex 0.3s ease;
+}
+.funnel-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  margin-top: 0.6rem;
+}
+.funnel-legend span {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.funnel-legend span::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--dot, var(--muted));
+}
+
+/* Horizontal bar charts (score distribution, top employers) */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.bar-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 2rem;
+  align-items: center;
+  gap: 0.7rem;
+}
+.bar-label {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bar-track {
+  height: 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 2px;
+  transition: width 0.4s ease;
+  background: var(--border-bright);
+}
+.bar-fill.is-green {
+  background: var(--green);
+}
+.bar-fill.is-amber {
+  background: var(--amber);
+}
+.bar-fill.is-red {
+  background: var(--red);
+}
+.bar-fill.is-steel {
+  background: var(--steel);
+}
+.bar-val {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: right;
+  color: var(--text);
+}
+
+/* Steps list on the dashboard */
+.steps {
+  list-style: none;
+  counter-reset: step;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 0.75rem 0.9rem 0.75rem 3rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+.steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0.85rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.5rem;
+  height: 1.5rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--signal-glow);
+  border: 1px solid var(--signal-dim);
+  color: var(--signal);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* ---------------------------------------------------------------- Rewrite views */
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+.triple {
+  display: grid;
+  grid-template-columns: 1.3fr 1.7fr 1.3fr;
+  gap: 1rem;
+  align-items: start;
+}
+.pane-title {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pane-title .spacer {
+  flex: 1;
+}
+.editor,
+.preview-frame,
+.why-box,
+.diff {
+  width: 100%;
+  height: 74vh;
+}
+.editor {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre;
+  overflow: auto;
+  background: var(--bg-2);
+}
+.preview-frame {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.why-box {
+  overflow: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.9rem;
+}
+.why-summary {
+  margin: 0 0 0.75rem;
+  font-family: var(--display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.5;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.why-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.why-list li {
+  position: relative;
+  padding: 0.4rem 0 0.4rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.why-list li::before {
+  content: '▸';
+  position: absolute;
+  left: 0;
+  color: var(--signal);
+}
+.why-list li:last-child {
+  border-bottom: none;
+}
+.placeholder-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: var(--panel-2);
+  border: 1px dashed var(--border-bright);
+  border-radius: var(--radius-sm);
+}
+
+/* Page-lock indicator (one-page guarantee) */
+.lock {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.lock.ok {
+  color: var(--green);
+  border-color: rgba(76, 203, 139, 0.5);
+  background: var(--green-glow);
+}
+.lock.bad {
+  color: var(--amber);
+  border-color: rgba(232, 161, 60, 0.5);
+  background: var(--amber-glow);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+.tab {
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  cursor: pointer;
+}
+.tab.active {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: var(--signal-glow);
+}
+
+.diff {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem;
+  overflow: auto;
+}
+.diff-insert {
+  background: rgba(31, 157, 87, 0.16);
+  color: #136c3a;
+}
+.diff-delete {
+  background: rgba(210, 63, 48, 0.15);
+  color: #a82e20;
+  text-decoration: line-through;
+}
+
+/* ---------------------------------------------------------------- Jobs table interactions */
+/*
+ * The table still spans the full wide container (width:100% from the global
+ * rule). To keep the inner columns packed tight instead of stretching apart,
+ * the last column (the actions cell) is made greedy — it soaks up all the
+ * leftover width, so Company / Title / Location / Salary hug their content and
+ * the empty space lands harmlessly at the far right edge.
+ */
+.jobs-table th,
+.jobs-table td {
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+.jobs-table th:first-child,
+.jobs-table td:first-child {
+  padding-left: 0.55rem;
+}
+/* Extra breathing room so the score reticle isn't crowding the company name. */
+.jobs-table th:nth-child(3),
+.jobs-table td:nth-child(3) {
+  padding-left: 2rem;
+}
+/*
+ * The actions column hugs the buttons (whitespace:nowrap keeps them on one
+ * line); all the leftover width is shared by the content columns so they spread
+ * out to fill the table. The actions column's own padding keeps a gap between
+ * the widened Status column and the buttons, so nothing collides.
+ */
+.jobs-table th:last-child,
+.jobs-table td:last-child {
+  width: 1%;
+  white-space: nowrap;
+  padding-left: 2rem;
+  padding-right: 0.7rem;
+}
+/* Action buttons sit at the far-right edge, side by side (never stacked). */
+.jobs-table tbody td:last-child .row {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+/* Clickable, sortable column headers */
+.jobs-table th.sortable {
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: color 0.12s ease;
+}
+.jobs-table th.sortable:hover {
+  color: var(--text);
+}
+.jobs-table th.sorted {
+  color: var(--signal);
+}
+.sort-ind {
+  margin-left: 0.35rem;
+  font-size: 0.85em;
+  opacity: 0.45;
+}
+.jobs-table th.sorted .sort-ind {
+  opacity: 1;
+  color: var(--signal);
+}
+
+/* Colorful per-status chip in the queue */
+.job-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.16rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.job-status-icon {
+  font-size: 0.8em;
+  line-height: 1;
+}
+.job-status.st-new {
+  color: var(--steel);
+  background: rgba(38, 100, 189, 0.1);
+}
+.job-status.st-scored {
+  color: var(--green);
+  background: var(--green-glow);
+  box-shadow: 0 0 10px -3px var(--green);
+}
+.job-status.st-other {
+  color: var(--muted);
+  background: var(--panel-2);
+}
+.job-row {
+  cursor: pointer;
+}
+.job-row.is-open {
+  background: rgba(154, 116, 20, 0.07);
+}
+.job-row.is-open td {
+  border-bottom-color: transparent;
+}
+.job-title-link {
+  color: var(--text);
+  font-weight: 600;
+}
+.job-title-link:hover {
+  color: var(--signal);
+  text-decoration: none;
+}
+.job-title-link .ext {
+  color: var(--faint);
+  font-size: 0.85em;
+}
+/* Muted "seniority · type · applicants" line under a job title */
+.job-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+/* Labeled chips for the detail-page fields, shown in the expanded queue row */
+.job-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+.job-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  padding: 0.16rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  white-space: nowrap;
+}
+.job-fact-label {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.job-title-link:hover .ext {
+  color: var(--signal);
+}
+.job-why-row td {
+  background: var(--bg-2);
+  padding: 0.9rem 1rem;
+}
+.score-why {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.score-why-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  max-width: 80ch;
+}
+.score-why-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.score-why-label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  min-width: 4.5rem;
+}
+.why-chip {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+.why-chip.is-match {
+  color: var(--green);
+  border-color: rgba(76, 203, 139, 0.45);
+  background: var(--green-glow);
+}
+.why-chip.is-concern {
+  color: var(--amber);
+  border-color: rgba(232, 161, 60, 0.45);
+  background: var(--amber-glow);
+}
+.why-chip.is-review {
+  color: var(--steel);
+  border-color: rgba(38, 100, 189, 0.45);
+  background: rgba(38, 100, 189, 0.11);
+}
+
+/* Tale of the tape — candidate vs. role, side by side */
+.tape {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  max-width: 1200px;
+  background: var(--panel);
+}
+.tape-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1.3fr 1.3fr 5.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+  position: relative;
+}
+.tape-row:last-child {
+  border-bottom: none;
+}
+/* A thin status stripe on the left edge of each row. */
+.tape-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--border-bright);
+}
+.tape-row.is-match::before {
+  background: var(--green);
+}
+.tape-row.is-partial::before {
+  background: var(--amber);
+}
+.tape-row.is-gap::before {
+  background: var(--red);
+}
+.tape-head {
+  background: var(--bg-2);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.tape-head::before {
+  background: transparent;
+}
+.tape-dim {
+  font-weight: 600;
+  color: var(--text);
+}
+.tape-head .tape-dim {
+  color: var(--signal-dim);
+}
+.tape-you {
+  color: var(--green);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.tape-them {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+.tape-head .tape-you,
+.tape-head .tape-them {
+  color: var(--faint);
+}
+.tape-badge {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.is-match .tape-badge {
+  color: var(--green);
+}
+.is-partial .tape-badge {
+  color: var(--amber);
+}
+.is-gap .tape-badge {
+  color: var(--red);
+}
+
+@media (max-width: 720px) {
+  .tape-row {
+    grid-template-columns: 1fr 1fr 4.5rem;
+  }
+  .tape-them {
+    display: none;
+  }
+}
+
+/* Settings danger zone */
+.danger-zone {
+  border-color: rgba(229, 97, 79, 0.35);
+}
+.danger-zone h2 {
+  color: var(--red);
+}
+
+/* Empty state row in tables */
+.empty-cell {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- Tracker Kanban board */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+  gap: 0.8rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.board-col {
+  background: rgba(255, 255, 255, 0.3);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  min-height: 140px;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease,
+    transform 0.1s ease;
+}
+.board-col.droppable {
+  border-color: var(--border-bright);
+  border-style: dashed;
+}
+.board-col.over {
+  border-color: var(--signal);
+  background: var(--signal-glow);
+  transform: translateY(-2px);
+}
+.board-col.dim {
+  opacity: 0.4;
+}
+.col-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.col-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--col, var(--muted));
+  box-shadow: 0 0 8px -1px var(--col, transparent);
+  flex: none;
+}
+.col-title {
+  color: var(--text);
+  font-weight: 600;
+}
+.col-count {
+  margin-left: auto;
+  color: var(--faint);
+  font-weight: 700;
+}
+.col-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem;
+  flex: 1;
+}
+.col-empty {
+  text-align: center;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  padding: 1rem 0;
+}
+.job-card {
+  background: var(--panel);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.65rem;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, transform 0.06s ease;
+}
+.job-card:hover {
+  border-color: var(--signal);
+  box-shadow: 0 6px 16px -10px rgba(20, 30, 55, 0.35);
+}
+.job-card:active {
+  cursor: grabbing;
+}
+.job-card.dragging {
+  opacity: 0.5;
+  border-style: dashed;
+  border-color: var(--signal);
+}
+.job-card-top {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.job-card-text {
+  min-width: 0;
+}
+.job-company {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+.job-title {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.3;
+  margin-top: 0.1rem;
+}
+.job-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--border);
+}
+.job-card-actions .btn-sm {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.68rem;
+}
+.drag-hint {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 1rem;
+  cursor: grab;
+  letter-spacing: -2px;
+}
+.board-section-label {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin: 0.75rem 0 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.board-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ---------------------------------------------------------------- Rewrite queue navigator */
+.rewrite-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+}
+.nav-arrow {
+  flex: none;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.4rem 0.7rem;
+}
+.nav-arrow[aria-disabled='true'] {
+  opacity: 0.3;
+  pointer-events: none;
+}
+.nav-strip {
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  flex: 1;
+  padding: 0.15rem;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+.queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: none;
+  max-width: 230px;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-bright);
+  background: var(--panel-2);
+  color: var(--text);
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.06s ease;
+}
+.queue-chip:hover {
+  border-color: var(--signal);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.queue-chip.active {
+  border-color: var(--signal);
+  background: var(--signal-glow);
+  box-shadow: 0 0 0 1px var(--signal-dim) inset;
+}
+.queue-dot {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  border: 1.5px solid currentColor;
+}
+.queue-dot.is-green {
+  color: var(--green);
+}
+.queue-dot.is-amber {
+  color: var(--amber);
+}
+.queue-dot.is-red {
+  color: var(--red);
+}
+.queue-chip-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+.queue-company {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-title {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-count {
+  flex: none;
+  font-size: 0.74rem;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+/* ---------------------------------------------------------------- Companies view */
+.company-list {
+  display: grid;
+  gap: 0.7rem;
+}
+.company-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: border-color 0.13s ease;
+}
+.company-card:hover {
+  border-color: var(--border-bright);
+}
+.company-card.is-blocked {
+  opacity: 0.72;
+}
+.company-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+.caret {
+  color: var(--signal);
+  font-size: 0.8rem;
+  transition: transform 0.15s ease;
+  flex: none;
+}
+.caret.open {
+  transform: rotate(90deg);
+}
+.company-name {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.company-jobs {
+  border: none;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+}
+.company-jobs td {
+  padding: 0.5rem 0.7rem;
+}
+.company-jobs tr:hover {
+  background: rgba(154, 116, 20, 0.05);
+}
+
+/* Responsive */
+@media (max-width: 1280px) {
+  .triple {
+    grid-template-columns: 1fr;
+  }
+  .editor,
+  .preview-frame,
+  .why-box,
+  .diff {
+    height: 60vh;
+  }
+}
+@media (max-width: 720px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+  .board {
+    grid-auto-columns: minmax(170px, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------- Tracker: view toggle, filters, editable salary */
+
+/* Segmented Board/Table toggle */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.seg-btn {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  border-radius: 0;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg-btn + .seg-btn {
+  border-left: 1px solid var(--border-bright);
+}
+.seg-btn.is-active {
+  background: var(--signal);
+  color: var(--on-signal);
+}
+.seg-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Status filter chips (table view) */
+.filter-chip {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  padding: 0.26rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.filter-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--col, var(--muted));
+}
+.filter-chip.is-active {
+  border-color: var(--col, var(--signal));
+  color: var(--text);
+  background: color-mix(in srgb, var(--col, var(--signal)) 14%, transparent);
+}
+
+/* Per-row status <select> in the tracker table */
+.status-select {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.25rem 0.4rem;
+  width: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--col, var(--border-bright));
+  color: var(--col, var(--text));
+  background: color-mix(in srgb, var(--col, var(--panel-2)) 12%, var(--panel-2));
+  cursor: pointer;
+}
+
+/* Inline-editable salary cell */
+.salary-chip {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: text;
+  white-space: nowrap;
+}
+.salary-chip:hover {
+  border-color: var(--border-bright);
+  background: var(--panel-2);
+}
+.salary-pencil {
+  opacity: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.salary-chip:hover .salary-pencil {
+  opacity: 1;
+}
+.salary-input {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  width: 9rem;
+  padding: 0.25rem 0.4rem;
+}
+.salary-empty {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+/* Salary line on a tracker board card */
+.job-card-salary {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  color: var(--green);
+  margin-top: 0.15rem;
+}
+
+/* Cross-page background-rewrite status indicator (durable-background-rewrites).
+   Fixed to the bottom-right so it floats over any page without shifting layout;
+   renders nothing when no rewrites are tracked. */
+.rewrite-indicator {
+  position: fixed;
+  right: 1.1rem;
+  bottom: 1.1rem;
+  z-index: 40;
+  width: min(19rem, calc(100vw - 2.2rem));
+  padding: 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--glass-edge);
+  background: var(--panel);
+  -webkit-backdrop-filter: saturate(1.8) blur(22px);
+  backdrop-filter: saturate(1.8) blur(22px);
+  box-shadow: var(--glass-highlight), 0 12px 34px -18px rgba(20, 30, 55, 0.5);
+}
+.rewrite-indicator-head {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  padding: 0.1rem 0.35rem 0.4rem;
+}
+.rewrite-indicator ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.rewrite-indicator-item {
+  display: flex;
+  align-items: center;
+}
+.rewrite-indicator-link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  transition: background 0.14s ease;
+}
+.rewrite-indicator-link:hover {
+  background: var(--panel-2);
+}
+.rewrite-indicator-dismiss {
+  flex: none;
+  margin-left: 0.1rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--faint);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.14s ease, background 0.14s ease;
+}
+.rewrite-indicator-dismiss:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.rewrite-indicator-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  box-shadow: 0 0 8px currentColor;
+  color: var(--faint);
+}
+.rewrite-indicator-item.is-running .rewrite-indicator-dot {
+  background: var(--signal, var(--amber));
+  color: var(--signal, var(--amber));
+  animation: rewrite-pulse 1.1s ease-in-out infinite;
+}
+.rewrite-indicator-item.is-done .rewrite-indicator-dot {
+  background: var(--green);
+  color: var(--green);
+}
+.rewrite-indicator-item.is-truncated .rewrite-indicator-dot {
+  background: var(--amber);
+  color: var(--amber);
+}
+.rewrite-indicator-item.is-error .rewrite-indicator-dot {
+  background: var(--red);
+  color: var(--red);
+}
+@keyframes rewrite-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Live "generating" state in the PDF preview pane while a rewrite streams —
+   mirrors the cross-page indicator's pulsing running dot. */
+.preview-streaming {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.preview-streaming-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--signal, var(--amber));
+  color: var(--signal, var(--amber));
+  box-shadow: 0 0 8px currentColor;
+  animation: rewrite-pulse 1.1s ease-in-out infinite;
+}
+.rewrite-indicator-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.rewrite-indicator-company {
+  font-size: 0.8rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rewrite-indicator-title {
+  font-size: 0.72rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rewrite-indicator-phase {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.rewrite-indicator-item.is-done .rewrite-indicator-phase {
+  color: var(--green);
+}
+.rewrite-indicator-item.is-truncated .rewrite-indicator-phase {
+  color: var(--amber);
+}
+.rewrite-indicator-item.is-error .rewrite-indicator-phase {
+  color: var(--red);
+}
